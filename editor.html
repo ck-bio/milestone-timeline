@@ -1,0 +1,2068 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Timeline Editor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<style>
+/* ── Design tokens ─────────────────────────────────────────────── */
+:root {
+  --bg:#f0efea; --surface:#fff; --surface2:#f7f6f2;
+  --border:#e0dfd8; --border2:#c8c7c0;
+  --text:#1a1a1a; --text2:#555550; --text3:#999994;
+  --red:#c0392b; --red-bg:#fdf0ee; --red-bd:#e0a09a;
+  --green:#2d7a50;
+  --r:8px; --rl:12px;
+  --font:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+}
+[data-theme="dark"] {
+  --bg:#141414; --surface:#1e1e1e; --surface2:#262626;
+  --border:#333330; --border2:#444440;
+  --text:#e8e6e0; --text2:#9a9890; --text3:#555550;
+  --red-bg:#2a1a18; --red-bd:#6b3028;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:var(--font);font-size:14px;background:var(--bg);color:var(--text);
+     padding:1.5rem 1rem 5rem;transition:background .2s,color .2s;}
+/* ── Layout ── */
+.page{max-width:1200px;margin:0 auto;}
+.topbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:.3rem;}
+h1{font-size:21px;font-weight:500;}
+.sub{font-size:12px;color:var(--text3);margin-bottom:1.6rem;}
+/* ── Dark mode toggle ── */
+.dm-wrap{display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none;}
+.dm-icon{font-size:15px;color:var(--text3);}
+.dm-track{width:34px;height:19px;border-radius:10px;background:var(--border2);
+  position:relative;transition:background .2s;flex-shrink:0;}
+.dm-track.on{background:#555;}
+.dm-thumb{position:absolute;top:2px;left:2px;width:15px;height:15px;border-radius:50%;
+  background:#fff;transition:transform .18s;box-shadow:0 1px 3px rgba(0,0,0,.25);}
+.dm-track.on .dm-thumb{transform:translateX(15px);}
+/* ── Section labels ── */
+.slbl{font-size:10px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;
+  color:var(--text3);margin:1.8rem 0 .7rem;}
+/* ── Panels ── */
+.panels{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:14px;}
+.panels2{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;}
+@media(max-width:900px){.panels,.panels2{grid-template-columns:1fr;}}
+.panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:16px;}
+.ptitle{font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--text3);margin-bottom:12px;}
+/* ── Buttons ── */
+.btn{display:inline-flex;align-items:center;gap:5px;padding:6px 13px;border-radius:var(--r);
+  border:1px solid var(--border2);background:var(--surface);color:var(--text);
+  font-size:12px;font-family:var(--font);cursor:pointer;transition:all .14s;white-space:nowrap;}
+.btn:hover{background:var(--surface2);border-color:var(--text3);}
+.btn-sm{padding:4px 9px;font-size:11px;}
+.btn-danger{color:var(--red);}
+.btn-danger:hover{background:var(--red-bg);border-color:var(--red-bd);}
+.btn-dark{background:var(--text);color:var(--bg);border-color:var(--text);font-weight:500;}
+.btn-dark:hover{opacity:.85;}
+.btn-dark.ok{background:var(--green);border-color:var(--green);color:#fff;}
+.toolbar{display:flex;gap:8px;align-items:center;margin-bottom:9px;flex-wrap:wrap;}
+.spacer{flex:1;} .hint{font-size:11px;color:var(--text3);}
+/* ── Seg control ── */
+.seg-wrap{display:flex;gap:2px;background:var(--surface2);border-radius:100px;
+  padding:3px;border:.5px solid var(--border);}
+.seg-btn{padding:4px 13px;border:none;background:transparent;color:var(--text2);
+  font-size:11px;cursor:pointer;font-family:var(--font);transition:all .18s;border-radius:100px;}
+.seg-btn.on{background:var(--text);color:var(--bg);}
+/* ── Form inputs ── */
+input[type=text],input[type=number],input[type=url],select,textarea{
+  width:100%;padding:5px 8px;border:1px solid var(--border);border-radius:var(--r);
+  font-size:12px;font-family:var(--font);background:var(--surface);color:var(--text);
+  transition:border-color .14s;}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--text2);}
+input.err,select.err,textarea.err{border-color:var(--red)!important;background:var(--red-bg);}
+input[type=number]{width:68px;}
+/* ── Colour swatch ── */
+.sw{position:relative;border-radius:var(--r);overflow:hidden;border:1px solid var(--border);
+  flex-shrink:0;cursor:pointer;}
+.sw input[type=color]{position:absolute;inset:-4px;width:calc(100%+8px);
+  height:calc(100%+8px);border:none;padding:0;cursor:pointer;opacity:0;}
+.sw-face{position:absolute;inset:0;border-radius:5px;pointer-events:none;}
+/* ── Import zone ── */
+.import-zone{border:1.5px dashed var(--border2);border-radius:var(--rl);padding:16px 20px;
+  text-align:center;cursor:pointer;transition:all .15s;margin-bottom:1.6rem;background:var(--surface);}
+.import-zone:hover,.import-zone.drag-over{border-color:var(--text2);background:var(--surface2);}
+.import-zone strong{font-size:13px;color:var(--text2);}
+.import-zone p{font-size:12px;color:var(--text3);margin-top:4px;}
+#import-file{display:none;}
+/* ── Type rows ── */
+.type-row{display:flex;align-items:center;gap:7px;margin-bottom:8px;}
+.type-row input[type=text]{flex:1;}
+.type-preview{font-size:10px;letter-spacing:.06em;text-transform:uppercase;padding:2px 8px;
+  border-radius:100px;font-weight:500;white-space:nowrap;flex-shrink:0;min-width:60px;text-align:center;}
+.key-pill{font-size:10px;font-family:monospace;background:var(--surface2);border:1px solid var(--border);
+  border-radius:4px;padding:2px 6px;color:var(--text2);white-space:nowrap;}
+/* ── Style rows ── */
+.srow{display:flex;align-items:center;gap:8px;margin-bottom:8px;}
+.srow-lbl{font-size:11px;color:var(--text2);flex:1;}
+.srow-unit{font-size:11px;color:var(--text3);}
+.ssec{font-size:10px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--text3);margin:12px 0 6px;}
+.ssec:first-child{margin-top:0;}
+/* ── Text styles table ── */
+.ts-table{width:100%;border-collapse:collapse;}
+.ts-table td{padding:4px 6px 4px 0;vertical-align:middle;font-size:12px;}
+.ts-table td:first-child{color:var(--text2);width:90px;white-space:nowrap;}
+.ts-table input[type=number]{width:52px;}
+.ts-font-sel{font-size:11px;padding:3px 5px;}
+/* ── Tag library ── */
+.lib-pills{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:9px;min-height:24px;}
+.lib-pill{display:inline-flex;align-items:center;gap:4px;font-size:10px;padding:2px 8px;
+  border-radius:100px;border:1px solid var(--border);}
+.lib-pill .px{cursor:pointer;color:var(--text3);font-size:13px;line-height:1;}
+.lib-pill .px:hover{color:var(--red);}
+.tag-add-row{display:flex;gap:6px;margin-top:8px;}
+.tag-add-row input{flex:1;}
+/* ── Milestones table ── */
+.tbl-wrap{overflow-x:auto;border-radius:var(--rl);border:1px solid var(--border);
+  background:var(--surface);margin-bottom:1rem;}
+table{width:100%;border-collapse:collapse;min-width:900px;}
+thead th{background:var(--surface2);padding:8px 9px;text-align:left;font-size:10px;
+  font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--text3);
+  border-bottom:1px solid var(--border);white-space:nowrap;}
+tbody tr{border-bottom:1px solid var(--border);transition:background .1s;}
+tbody tr:last-child{border-bottom:none;}
+tbody tr:hover{background:var(--surface2);}
+td{padding:5px 7px;vertical-align:middle;}
+td textarea{resize:vertical;min-height:46px;line-height:1.5;}
+.drag-handle{cursor:grab;color:var(--border2);font-size:14px;padding:0 2px;user-select:none;}
+tr.dragging{opacity:.3;} tr.drag-over td{border-top:2px solid var(--text2);}
+.row-n{font-size:10px;color:var(--text3);text-align:center;min-width:18px;}
+.col-yr,.col-mo,.col-ty{white-space:nowrap;width:1%;}
+/* ── Autocomplete ── */
+.ac-wrap{position:relative;}
+.ac-drop{display:none;position:absolute;top:calc(100% + 3px);left:0;right:0;
+  background:var(--surface);border:1px solid var(--border2);border-radius:var(--rl);
+  box-shadow:0 4px 18px rgba(0,0,0,.13);z-index:500;max-height:200px;overflow-y:auto;}
+.ac-item{padding:6px 10px;font-size:12px;cursor:pointer;display:flex;
+  justify-content:space-between;align-items:center;}
+.ac-item:hover,.ac-item.ac-sel{background:var(--surface2);}
+.ac-badge{font-size:10px;color:var(--text3);background:var(--surface2);border-radius:4px;
+  padding:1px 5px;border:1px solid var(--border);margin-left:6px;flex-shrink:0;}
+/* ── Tag pills in rows ── */
+.tags-cell{display:flex;flex-wrap:wrap;gap:4px;align-items:center;min-width:140px;}
+.r-pill{display:inline-flex;align-items:center;gap:2px;font-size:10px;padding:2px 7px;
+  border-radius:100px;background:var(--surface2);border:1px solid var(--border);}
+.r-pill .px{cursor:pointer;color:var(--text3);font-size:12px;}
+.r-pill .px:hover{color:var(--red);}
+.btn-plus{width:20px;height:20px;border-radius:50%;border:1px dashed var(--border2);
+  background:transparent;font-size:14px;cursor:pointer;color:var(--text3);
+  display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .12s;}
+.btn-plus:hover{border-color:var(--text2);color:var(--text);background:var(--surface2);}
+/* ── Tag picker popup ── */
+#tag-picker{display:none;position:fixed;z-index:900;background:var(--surface);
+  border:1px solid var(--border2);border-radius:var(--rl);padding:9px 11px;
+  box-shadow:0 4px 20px rgba(0,0,0,.14);max-width:270px;}
+.pk-lbl{font-size:9px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--text3);margin-bottom:7px;}
+#picker-tags{display:flex;flex-wrap:wrap;gap:4px;}
+.pk-tag{font-size:10px;padding:3px 9px;border-radius:100px;background:var(--surface2);
+  border:1px solid var(--border);cursor:pointer;transition:all .1s;}
+.pk-tag:hover{background:var(--text);color:var(--bg);border-color:var(--text);}
+/* ── Validation banner ── */
+#val-banner{display:none;background:var(--red-bg);border:1px solid var(--red-bd);
+  border-radius:var(--rl);padding:10px 14px;margin-bottom:1rem;font-size:12px;color:var(--red);}
+#val-banner ul{margin:5px 0 0 16px;}
+/* ── Live preview ── */
+.preview-panel{background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--rl);margin-bottom:1.5rem;overflow:hidden;}
+.preview-hdr{display:flex;align-items:center;justify-content:space-between;
+  padding:10px 14px;border-bottom:1px solid var(--border);cursor:pointer;user-select:none;}
+.preview-hdr span{font-size:11px;font-weight:600;letter-spacing:.07em;
+  text-transform:uppercase;color:var(--text3);}
+.preview-body{padding:20px;display:block;}
+.mini-tl{position:relative;width:660px;max-width:100%;margin:0 auto;padding:0 0 20px;}
+.mini-spine{position:absolute;left:50%;transform:translateX(-.5px);top:0;bottom:0;width:1px;}
+.mini-row{display:grid;grid-template-columns:1fr 32px 1fr;position:relative;}
+.mini-left{grid-column:1;padding-right:14px;}
+.mini-right{grid-column:3;padding-left:14px;}
+.mini-sc{grid-column:2;position:relative;display:flex;justify-content:center;}
+.mini-dot{width:9px;height:9px;border-radius:50%;position:absolute;left:50%;
+  transform:translateX(-50%);top:18px;z-index:2;}
+.mini-conn{position:absolute;top:22px;}
+.mini-conn.ml{right:calc(50% + 4.5px);left:-14px;}
+.mini-conn.mr{left:calc(50% + 4.5px);right:-14px;}
+.mini-card{background:var(--surface2);border:.5px solid var(--border);border-radius:9px;
+  padding:9px 11px;margin-bottom:12px;cursor:pointer;overflow:hidden;word-break:break-word;transition:opacity .25s;}
+.mini-card.mc-dim{opacity:.1;pointer-events:none;}
+.mini-badge{display:inline-block;font-size:9px;letter-spacing:.06em;text-transform:uppercase;
+  padding:1px 7px;border-radius:100px;margin-bottom:5px;font-weight:500;}
+.mini-title{font-size:13px;font-weight:400;line-height:1.3;margin-bottom:2px;}
+.mini-sub{font-size:10px;color:var(--text2);}
+.mini-yr{font-size:14px;font-weight:400;color:var(--text3);}
+.mini-tags{display:flex;flex-wrap:wrap;gap:3px;margin-top:6px;}
+.mini-tag{font-size:9px;padding:1px 7px;border-radius:100px;background:var(--bg);
+  border:.5px solid var(--border);}
+.mini-desc{display:none;padding-top:8px;margin-top:8px;border-top:.5px solid var(--border);
+  font-size:11px;color:var(--text2);line-height:1.6;}
+/* ── Output ── */
+.out-wrap{background:#1a1a1a;border-radius:var(--rl);overflow:hidden;}
+.out-hdr{display:flex;justify-content:space-between;align-items:center;
+  padding:9px 14px;background:#242424;}
+.out-hdr span{font-size:11px;color:#888;letter-spacing:.05em;}
+.out-btns{display:flex;gap:7px;}
+.out-btn{padding:5px 12px;border-radius:6px;border:1px solid #444;background:#333;
+  font-size:11px;font-family:var(--font);cursor:pointer;color:#ccc;transition:all .14s;}
+.out-btn:hover{background:#444;}
+.out-btn.ok{background:#2d7a50;border-color:#2d7a50;color:#fff;}
+pre{padding:14px 16px;font-size:11.5px;line-height:1.65;color:#d4d4d4;overflow-x:auto;
+  max-height:340px;overflow-y:auto;white-space:pre;font-family:"SF Mono","Fira Code",monospace;}
+</style>
+</head>
+<body>
+<div class="page">
+
+<!-- TOP BAR -->
+<div class="topbar">
+  <div>
+    <h1>Timeline Editor</h1>
+    <p class="sub">Configure below, then copy or download <code>data.js</code>.</p>
+  </div>
+  <!-- Dark mode: sun icon | toggle | moon icon -->
+  <div class="dm-wrap" id="dm-wrap">
+    <span class="dm-icon">&#9788;</span>
+    <div class="dm-track" id="dm-track"><div class="dm-thumb"></div></div>
+    <span class="dm-icon">&#9790;</span>
+  </div>
+</div>
+
+<!-- IMPORT ZONE -->
+<div class="import-zone" id="import-zone"
+     ondragover="event.preventDefault();this.classList.add('drag-over')"
+     ondragleave="this.classList.remove('drag-over')"
+     ondrop="handleDrop(event)">
+  <strong>&#8679; Import existing data.js</strong>
+  <p>Click to browse, or drag &amp; drop your file here</p>
+</div>
+<input type="file" id="import-file" accept=".js">
+
+<!-- CONFIGURATION ROW 1: Type | Spine & Connectors (2-col) -->
+<div class="slbl">Configuration</div>
+<div class="panels">
+
+  <!-- TYPE PANEL -->
+  <div class="panel">
+    <div class="ptitle">Type</div>
+    <div id="types-list"></div>
+    <button class="btn btn-sm" id="btn-add-type">+ Add type</button>
+  </div>
+
+  <!-- SPINE & CONNECTORS PANEL -->
+  <div class="panel">
+    <div class="ptitle">Spine &amp; Connectors</div>
+    <div class="ssec">Spine</div>
+    <div class="srow">
+      <span class="srow-lbl">Colour</span>
+      <div class="sw" style="width:28px;height:28px">
+        <div class="sw-face" id="sw-spine-color"></div>
+        <input type="color" id="inp-spine-color">
+      </div>
+    </div>
+    <div class="srow">
+      <span class="srow-lbl">Width</span>
+      <input type="number" id="inp-spine-width" min="0.5" max="10" step="0.5" style="width:68px">
+      <span class="srow-unit">px</span>
+    </div>
+    <div class="ssec">Connectors</div>
+    <div class="srow">
+      <span class="srow-lbl">Colour</span>
+      <div class="sw" style="width:28px;height:28px">
+        <div class="sw-face" id="sw-conn-color"></div>
+        <input type="color" id="inp-conn-color">
+      </div>
+    </div>
+    <div class="srow">
+      <span class="srow-lbl">Width</span>
+      <input type="number" id="inp-conn-width" min="0.5" max="10" step="0.5" style="width:68px">
+      <span class="srow-unit">px</span>
+    </div>
+    <div class="ssec">Card</div>
+    <div class="srow">
+      <span class="srow-lbl">Background</span>
+      <div class="sw" style="width:28px;height:28px">
+        <div class="sw-face" id="sw-card-bg"></div>
+        <input type="color" id="inp-card-bg">
+      </div>
+    </div>
+    <div class="srow">
+      <span class="srow-lbl">Border colour</span>
+      <div class="sw" style="width:28px;height:28px">
+        <div class="sw-face" id="sw-card-border"></div>
+        <input type="color" id="inp-card-border">
+      </div>
+    </div>
+    <div class="srow">
+      <span class="srow-lbl">Border width</span>
+      <input type="number" id="inp-card-bw" min="0" max="6" step="0.5" style="width:68px">
+      <span class="srow-unit">px</span>
+    </div>
+  </div>
+
+</div>
+
+<!-- CONFIGURATION ROW 2: Typography | Tag Library -->
+<div class="panels2">
+
+  <!-- TYPOGRAPHY PANEL -->
+  <div class="panel">
+    <div class="ptitle">Typography</div>
+    <div class="srow" style="margin-bottom:12px;">
+      <span class="srow-lbl" style="font-weight:600;">Global font</span>
+      <select id="font-select" style="flex:1;font-size:12px;padding:4px 6px;">
+        <optgroup label="Serif">
+          <option>Crimson Pro</option><option>Playfair Display</option>
+          <option>Lora</option><option>EB Garamond</option>
+          <option>Source Serif 4</option><option>Libre Baskerville</option>
+        </optgroup>
+        <optgroup label="Sans-serif">
+          <option>DM Sans</option><option>Inter</option><option>Outfit</option>
+          <option>Plus Jakarta Sans</option><option>Raleway</option><option>Nunito</option>
+        </optgroup>
+      </select>
+    </div>
+    <table class="ts-table">
+      <thead>
+        <tr>
+          <th style="font-size:10px;color:var(--text3);font-weight:600;padding:0 6px 6px 0;min-width:90px">Element</th>
+          <th style="font-size:10px;color:var(--text3);font-weight:600;padding:0 6px 6px 0">Font override</th>
+          <th style="font-size:10px;color:var(--text3);font-weight:600;padding:0 6px 6px 0">Size</th>
+          <th style="font-size:10px;color:var(--text3);font-weight:600;padding:0 0 6px">Colour</th>
+        </tr>
+      </thead>
+      <tbody id="ts-tbody"></tbody>
+    </table>
+  </div>
+
+  <!-- TAG LIBRARY -->
+  <div class="panel">
+    <div class="ptitle">Tag Library</div>
+    <p style="font-size:11px;color:var(--text3);margin-bottom:8px;">Each tag can have its own colour. Leave the swatch grey for the default.</p>
+    <div class="lib-pills" id="lib-pills"></div>
+    <div class="tag-add-row">
+      <input type="text" id="new-tag" placeholder="New tag name&hellip;">
+      <div class="sw" id="new-tag-sw" style="width:32px;height:32px" title="Optional tag colour">
+        <div class="sw-face" id="new-tag-sw-face" style="background:#cccccc"></div>
+        <input type="color" id="new-tag-color" value="#cccccc">
+      </div>
+      <button class="btn btn-sm" id="btn-add-tag">Add</button>
+    </div>
+  </div>
+</div>
+
+<!-- MILESTONES -->
+<div class="slbl">Milestones</div>
+<div class="toolbar">
+  <button class="btn" id="btn-add-row">+ Add milestone</button>
+  <button class="btn" id="sort-btn">&#8645; Oldest &rarr; Newest</button>
+  <button class="btn btn-sm" id="btn-clear-save" style="color:var(--text3)">&#10005; Clear saved</button>
+  <span class="spacer"></span>
+  <span class="hint">Drag &#10047; to reorder, or sort automatically</span>
+</div>
+<div id="val-banner"></div>
+<div class="tbl-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th></th><th>#</th><th class="col-yr">Year</th><th class="col-mo">Month</th><th class="col-ty">Type</th>
+        <th style="min-width:140px">Title</th>
+        <th style="min-width:150px">Institution / Journal</th>
+        <th style="min-width:100px">Logo URL</th>
+        <th style="min-width:160px">Link URL &amp; Label</th>
+        <th style="min-width:200px">Description</th>
+        <th style="min-width:160px">Tags</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody id="tbody"></tbody>
+  </table>
+</div>
+<button class="btn" id="btn-add-row2">+ Add milestone</button>
+
+<!-- LIVE PREVIEW -->
+<div class="preview-panel" style="margin-top:1.5rem;">
+  <div class="preview-hdr" style="cursor:default">
+    <span>Live Preview</span>
+  </div>
+  <div class="preview-body" id="preview-body">
+    <div class="mini-tl" id="mini-tl">
+      <div class="mini-spine" id="mini-spine"></div>
+    </div>
+  </div>
+</div>
+
+<!-- OUTPUT -->
+<div class="out-wrap" style="margin-top:1rem;">
+  <div class="out-hdr">
+    <span>data.js &mdash; copy or download</span>
+    <div class="out-btns">
+      <button class="out-btn" id="btn-download">&#8681; Download data.js</button>
+      <button class="out-btn" id="copy-btn">Copy</button>
+    </div>
+  </div>
+  <pre id="output"></pre>
+</div>
+
+</div><!-- /page -->
+
+<!-- Floating tag picker -->
+<div id="tag-picker">
+  <div class="pk-lbl">Add from library</div>
+  <div id="picker-tags"></div>
+</div>
+
+<script>
+/* =================================================================
+   DATA LISTS (journals + universities for autocomplete)
+================================================================= */
+const JOURNALS = [
+  // Nature family
+  "Nature","Nature Medicine","Nature Methods","Nature Genetics","Nature Biotechnology",
+  "Nature Communications","Nature Cell Biology","Nature Chemical Biology","Nature Neuroscience",
+  "Nature Immunology","Nature Structural & Molecular Biology","Nature Metabolism",
+  "Nature Microbiology","Nature Aging","Nature Cancer","Nature Chemical Engineering",
+  "Nature Chemistry","Nature Physics","Nature Materials","Nature Electronics",
+  "Nature Machine Intelligence","Nature Computational Science","Nature Reviews Cancer",
+  "Nature Reviews Genetics","Nature Reviews Immunology","Nature Reviews Molecular Cell Biology",
+  "Nature Reviews Neuroscience","Nature Reviews Drug Discovery","Nature Reviews Microbiology",
+  "Nature Reviews Medicine","Nature Reviews Methods Primers",
+  // Science family
+  "Science","Science Advances","Science Translational Medicine","Science Immunology",
+  "Science Signaling","Science Robotics",
+  // Cell family
+  "Cell","Cell Systems","Cell Stem Cell","Cell Reports","Cell Chemical Biology",
+  "Cell Host & Microbe","Cell Metabolism","Cell Reports Medicine","Cell Reports Methods",
+  "Molecular Cell","Developmental Cell","Current Biology","Cell Genomics",
+  // PLOS family
+  "PLOS Biology","PLOS Genetics","PLOS Medicine","PLOS ONE","PLOS Computational Biology",
+  "PLOS Pathogens","PLOS Neglected Tropical Diseases",
+  // eLife / iScience / Patterns
+  "eLife","iScience","Patterns","Communications Biology","Communications Medicine",
+  // BMC family
+  "BMC Genomics","BMC Bioinformatics","BMC Biology","BMC Medicine","BMC Cancer",
+  "BMC Evolutionary Biology","BMC Systems Biology","BMC Structural Biology",
+  // Genome journals
+  "Genome Research","Genome Biology","Genome Biology and Evolution","Genome Medicine",
+  "Genomics","Genomics & Proteomics & Bioinformatics",
+  // Nucleic acids / RNA
+  "Nucleic Acids Research","RNA","RNA Biology","Genes & Development",
+  // Bioinformatics
+  "Bioinformatics","Briefings in Bioinformatics","Briefings in Functional Genomics",
+  "PLOS Computational Biology","Journal of Computational Biology",
+  "Algorithms for Molecular Biology","GigaScience",
+  // Genetics
+  "Genetics","GENETICS","Heredity","Human Molecular Genetics","American Journal of Human Genetics",
+  "European Journal of Human Genetics","Genetics in Medicine","Genetic Epidemiology",
+  "Molecular Genetics and Genomics","Annals of Human Genetics","G3: Genes, Genomes, Genetics",
+  // Epigenetics / chromatin
+  "Epigenetics","Epigenetics & Chromatin","Epigenomics",
+  // Cancer
+  "Cancer Research","Cancer Cell","Cancer Discovery","Clinical Cancer Research","Oncogene",
+  "Annals of Oncology","Journal of Clinical Oncology","British Journal of Cancer",
+  "International Journal of Cancer","Cancer Letters","Carcinogenesis","Cancers",
+  "npj Precision Oncology","JCO Precision Oncology",
+  // Immunology
+  "Immunity","Journal of Immunology","Journal of Experimental Medicine",
+  "European Journal of Immunology","Mucosal Immunology","Frontiers in Immunology",
+  "Clinical & Experimental Immunology","Cellular & Molecular Immunology",
+  // Microbiology
+  "mBio","Journal of Bacteriology","Infection and Immunity","Molecular Microbiology",
+  "Microbiology","Microbiology Spectrum","ISME Journal","Environmental Microbiology",
+  "Frontiers in Microbiology","Applied and Environmental Microbiology",
+  // Cell biology
+  "Journal of Cell Biology","Journal of Cell Science","Molecular Biology of the Cell",
+  "Traffic","Autophagy","Cell Death & Differentiation","Cell Death & Disease",
+  // Biochemistry / structural
+  "Journal of Biological Chemistry","Biochemistry","FEBS Journal","Biochemical Journal",
+  "Protein Science","Structure","Journal of Molecular Biology","FEBS Letters",
+  "Biochemical and Biophysical Research Communications",
+  // Neuroscience
+  "Neuron","Brain","Journal of Neuroscience","Cerebral Cortex","NeuroImage",
+  "Nature Human Behaviour","PNAS Neuroscience","Frontiers in Neuroscience",
+  "Journal of Neurophysiology","Neuropsychologia","eNeuro",
+  // Development / stem cells
+  "Development","Developmental Cell","Developmental Biology","Stem Cell Reports",
+  "Stem Cells","Stem Cell Research & Therapy","Cell Stem Cell",
+  // Medicine / clinical
+  "New England Journal of Medicine","The Lancet","JAMA","BMJ","Annals of Internal Medicine",
+  "The Lancet Digital Health","The Lancet Oncology","The Lancet Infectious Diseases",
+  "JAMA Oncology","JAMA Internal Medicine","Annals of Oncology",
+  // Annual Reviews
+  "Annual Review of Biochemistry","Annual Review of Cell and Developmental Biology",
+  "Annual Review of Genetics","Annual Review of Immunology","Annual Review of Neuroscience",
+  "Annual Review of Pharmacology and Toxicology","Annual Review of Genomics and Human Genetics",
+  "Annual Review of Microbiology","Annual Review of Ecology, Evolution, and Systematics",
+  // Trends
+  "Trends in Cell Biology","Trends in Genetics","Trends in Biochemical Sciences",
+  "Trends in Immunology","Trends in Neurosciences","Trends in Microbiology",
+  "Trends in Biotechnology","Trends in Ecology & Evolution","Trends in Cancer",
+  "Trends in Molecular Medicine","Trends in Pharmacological Sciences","Trends in Cognitive Sciences",
+  // Current Opinion
+  "Current Opinion in Genetics & Development","Current Opinion in Cell Biology",
+  "Current Opinion in Structural Biology","Current Opinion in Microbiology",
+  "Current Opinion in Immunology","Current Opinion in Neurobiology",
+  "Current Opinion in Biotechnology","Current Opinion in Systems Biology",
+  // Chemistry
+  "JACS","Angewandte Chemie","Chemical Science","ACS Chemical Biology",
+  "ACS Synthetic Biology","Chemistry & Biology","ChemBioChem","Analytical Chemistry",
+  "Journal of the American Chemical Society","Chemical Reviews","Nature Chemistry",
+  "Organic & Biomolecular Chemistry","Biochemistry","RSC Chemical Biology",
+  // Biophysics
+  "Biophysical Journal","eLife Biophysics",
+  // General
+  "PNAS","Scientific Reports","Royal Society Open Science","F1000Research",
+  "PeerJ","Open Biology","Biology Direct","Frontiers in Genetics",
+  "Frontiers in Molecular Biosciences","Frontiers in Cell and Developmental Biology",
+  "International Journal of Molecular Sciences","Molecular Biology Reports",
+  // Metabolic / systems biology
+  "Molecular Systems Biology","Systems Biology and Applications","Metabolic Engineering",
+  "Metabolomics","npj Systems Biology and Applications",
+  // Biotech / pharma
+  "Biotechnology and Bioengineering","Biotechnology Journal","Biotechnology for Biofuels",
+  "Molecular Therapy","Human Gene Therapy","Gene Therapy","Pharmaceutical Research",
+  // Preprints (for reference)
+  "bioRxiv","medRxiv"
+];
+
+const UNIVERSITIES = [
+  // USA
+  "MIT","Harvard University","Stanford University","California Institute of Technology",
+  "Yale University","Princeton University","Columbia University","University of Pennsylvania",
+  "Cornell University","Duke University","Northwestern University","Johns Hopkins University",
+  "University of Chicago","University of California Berkeley","UCLA","UC San Diego",
+  "UC San Francisco","UC Davis","UC Santa Barbara","UC Irvine","UC Santa Cruz",
+  "University of Michigan","University of Washington","New York University",
+  "Carnegie Mellon University","University of Texas Austin","University of Wisconsin-Madison",
+  "University of Illinois Urbana-Champaign","Ohio State University","Penn State University",
+  "Purdue University","University of Minnesota","Michigan State University",
+  "University of North Carolina","University of Virginia","Georgetown University",
+  "Boston University","Northeastern University","Tufts University","Brandeis University",
+  "Emory University","Vanderbilt University","Rice University","University of Rochester",
+  "Case Western Reserve University","University of Notre Dame","Wake Forest University",
+  "Georgetown University","University of Miami","Tulane University","University of Pittsburgh",
+  "University of Colorado Boulder","University of Arizona","Arizona State University",
+  "University of Florida","University of Georgia","Rutgers University",
+  "University of Maryland","George Washington University","American University",
+  "Howard University","Baylor University","Texas A&M University","University of Iowa",
+  "University of Kansas","Indiana University","University of Oregon","University of Utah",
+  "Brigham Young University","University of Nebraska","Virginia Tech","University of Alabama",
+  "University of Tennessee","Louisiana State University","University of New Mexico",
+  "University of Hawaii","University of Delaware","Drexel University","Temple University",
+  "University of Cincinnati","University of Houston","University of Connecticut",
+  "University of Massachusetts Amherst","Boston College","Fordham University",
+  "Syracuse University","Rochester Institute of Technology","Stevens Institute of Technology",
+  "Rensselaer Polytechnic Institute","Worcester Polytechnic Institute",
+  "Dartmouth College","Brown University","Wellesley College","Williams College",
+  "Amherst College","Swarthmore College","Harvey Mudd College","Pomona College",
+  // UK
+  "University of Cambridge","University of Oxford","Imperial College London","UCL",
+  "University of Edinburgh","University of Manchester","King's College London",
+  "University of Bristol","University of Warwick","University of Glasgow",
+  "University of Southampton","University of Birmingham","University of Sheffield",
+  "University of Leeds","University of Nottingham","University of Liverpool",
+  "University of Newcastle","Cardiff University","University of Exeter","University of Bath",
+  "Queen Mary University of London","Durham University","University of St Andrews",
+  "University of Aberdeen","Heriot-Watt University","University of Dundee",
+  "University of Strathclyde","Loughborough University","University of Reading",
+  "University of Surrey","University of Kent","Swansea University","Bangor University",
+  "Lancaster University","University of East Anglia","University of York",
+  "Brunel University London","City University London","Goldsmiths University of London",
+  "Royal Holloway University of London","SOAS University of London","Birkbeck University of London",
+  "London School of Economics","London School of Hygiene & Tropical Medicine",
+  "Queen's University Belfast","University of Ulster","University of Leicester",
+  "De Montfort University","Aston University","Coventry University","University of Lincoln",
+  "University of Huddersfield","University of Bradford","University of Portsmouth",
+  // Europe (non-UK)
+  "ETH Zurich","EPFL","University of Zurich","University of Basel","University of Bern",
+  "LMU Munich","TU Munich","Heidelberg University","University of Bonn","University of Cologne",
+  "Free University Berlin","Humboldt University Berlin","Technical University Berlin",
+  "RWTH Aachen University","University of Hamburg","University of Frankfurt","University of Freiburg",
+  "University of Stuttgart","Karlsruhe Institute of Technology","University of Gottingen",
+  "University of Tubingen","University of Munster","University of Erlangen-Nuremberg",
+  "Charité - Universitätsmedizin Berlin","Dresden University of Technology","University of Leipzig",
+  "Sorbonne University","University of Paris","École Normale Supérieure","École Polytechnique",
+  "University of Lyon","University of Bordeaux","University of Strasbourg","University of Marseille",
+  "University of Toulouse","University of Montpellier","University of Grenoble",
+  "INSEAD","Sciences Po","Paris Dauphine University","Université Paris-Saclay",
+  "KU Leuven","Ghent University","University of Antwerp","Vrije Universiteit Brussel",
+  "University of Amsterdam","Leiden University","Utrecht University","Delft University of Technology",
+  "Eindhoven University of Technology","Wageningen University","Erasmus University Rotterdam",
+  "Radboud University","University of Groningen","Maastricht University",
+  "University of Copenhagen","University of Aarhus","University of Oslo","University of Bergen",
+  "Norwegian University of Science and Technology","Uppsala University","Stockholm University",
+  "Karolinska Institutet","Lund University","Chalmers University of Technology",
+  "KTH Royal Institute of Technology","University of Gothenburg","Umeå University",
+  "University of Helsinki","Aalto University","Tampere University",
+  "University of Barcelona","Autonomous University of Barcelona","University of Madrid (UAM)",
+  "Complutense University of Madrid","University of Valencia","University of Seville",
+  "University of Salamanca","University of Granada","Pompeu Fabra University",
+  "University of Bologna","Sapienza University of Rome","Politecnico di Milano",
+  "University of Milan","University of Padova","University of Turin","University of Florence",
+  "University of Pisa","Scuola Normale Superiore","University of Naples Federico II",
+  "Charles University Prague","Masaryk University","Czech Technical University",
+  "University of Warsaw","Jagiellonian University","Warsaw University of Technology",
+  "University of Budapest","Central European University","Eötvös Loránd University",
+  "University of Vienna","TU Wien","Medical University of Vienna","University of Graz",
+  "University of Zurich","University of Geneva","University of Lausanne",
+  "Trinity College Dublin","University College Dublin","University College Cork",
+  "National University of Ireland Galway","Dublin City University",
+  "University of Lisbon","University of Porto","University of Coimbra",
+  "University of Athens","Aristotle University of Thessaloniki",
+  // Canada
+  "University of Toronto","McGill University","University of British Columbia",
+  "University of Alberta","University of Montreal","McMaster University",
+  "University of Ottawa","University of Calgary","Queen's University","Western University",
+  "Dalhousie University","University of Manitoba","Simon Fraser University",
+  "University of Victoria","Concordia University","York University","University of Waterloo",
+  "University of Guelph","Laval University","Carleton University",
+  // Australia / NZ
+  "Australian National University","University of Melbourne","University of Sydney",
+  "University of Queensland","Monash University","University of New South Wales",
+  "University of Adelaide","University of Western Australia","Macquarie University",
+  "RMIT University","Griffith University","Curtin University","Deakin University",
+  "University of Auckland","Victoria University of Wellington","University of Otago",
+  "University of Canterbury","Massey University",
+  // Asia
+  "University of Tokyo","Kyoto University","Osaka University","Tohoku University",
+  "Tokyo Institute of Technology","University of Tsukuba","Nagoya University","Keio University",
+  "Waseda University","Hokkaido University","Seoul National University","KAIST",
+  "Yonsei University","Korea University","POSTECH","Sungkyunkwan University",
+  "Peking University","Tsinghua University","Fudan University","Shanghai Jiao Tong University",
+  "Zhejiang University","University of Science and Technology of China","Nanjing University",
+  "Sun Yat-sen University","Wuhan University","Harbin Institute of Technology",
+  "National University of Singapore","Nanyang Technological University",
+  "National Taiwan University","National Chiao Tung University",
+  "Hong Kong University","Chinese University of Hong Kong","HKUST","City University of Hong Kong",
+  "Indian Institute of Technology Bombay","IIT Delhi","IIT Madras","IIT Kanpur","IIT Kharagpur",
+  "Indian Institute of Science","AIIMS Delhi",
+  "University of Malaysia","National University of Malaysia","University of Indonesia",
+  "Chulalongkorn University","University of the Philippines",
+  // Middle East / Africa
+  "Hebrew University of Jerusalem","Tel Aviv University","Weizmann Institute of Science",
+  "Technion Israel Institute of Technology","Bar-Ilan University",
+  "King Abdullah University of Science and Technology","American University of Beirut",
+  "Cairo University","University of Cape Town","University of the Witwatersrand",
+  "Stellenbosch University","University of Nairobi","University of Ghana",
+  // Latin America
+  "University of São Paulo","University of Campinas","Federal University of Rio de Janeiro",
+  "National Autonomous University of Mexico","University of Buenos Aires",
+  "Pontifical Catholic University of Chile","University of Chile",
+  // Institutes & specialist (common in research CVs)
+  "Wellcome Sanger Institute","Broad Institute","Cold Spring Harbor Laboratory",
+  "European Molecular Biology Laboratory (EMBL)","Max Planck Institute",
+  "Francis Crick Institute","Babraham Institute","MRC Laboratory of Molecular Biology",
+  "Sanger Institute Summer Programme","NIH","HHMI","Janelia Research Campus",
+  "Pasteur Institute","Institut Curie","DKFZ","Helmholtz Association",
+  "Chan Zuckerberg Biohub","Allen Institute","Novartis Institutes for BioMedical Research",
+  "Genentech","AstraZeneca","GlaxoSmithKline R&D","Pfizer Research","Moderna",
+  "Illumina","Oxford Nanopore Technologies","10x Genomics"
+];
+
+// Merged searchable list — each entry tagged as 'J' or 'U'
+const AC_LIST = [
+  ...JOURNALS.map(j=>({val:j,cat:'Journal'})),
+  ...UNIVERSITIES.map(u=>({val:u,cat:'Institution'}))
+];
+
+/* =================================================================
+   CONSTANTS
+================================================================= */
+var MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+/* All font names we offer */
+var ALL_FONTS = [
+  'Crimson Pro','Playfair Display','Lora','EB Garamond','Source Serif 4','Libre Baskerville',
+  'DM Sans','Inter','Outfit','Plus Jakarta Sans','Raleway','Nunito'
+];
+
+/* Text-style element definitions */
+var TS_DEFS = [
+  {key:'year',        label:'Year / Date', def:17},
+  {key:'title',       label:'Title',       def:15},
+  {key:'institution', label:'Institution', def:11},
+  {key:'link',        label:'Link',        def:10},
+  {key:'description', label:'Description', def:12}
+];
+
+/* LocalStorage key — bump if data shape changes */
+var LS_KEY = 'tl-editor-v5';
+
+/* =================================================================
+   STATE — single source of truth
+================================================================= */
+var config = {
+  theme:'light', sortDesc:false,
+  font:'Crimson Pro',  /* global font fallback */
+  spine:     {color:'#888888', width:1},
+  connector: {color:'#888888', width:1},
+  card:      {background:'', borderColor:'', borderWidth:0.5},
+  textStyles:{
+    year:        {font:'', size:17, color:''},
+    title:       {font:'', size:15, color:''},
+    institution: {font:'', size:11, color:''},
+    link:        {font:'', size:10, color:''},
+    description: {font:'', size:12, color:''}
+  },
+  tagColors:{},
+  types:[
+    {key:'degree',      label:'Degree',      color:'#2d7a50'},
+    {key:'project',     label:'Project',     color:'#1a6699'},
+    {key:'publication', label:'Publication', color:'#b87c00'}
+  ]
+};
+
+/* tagLibrary: array of {text, color} */
+var tagLibrary = [
+  {text:'Molecular Biology',color:''},{text:'Epigenetics',color:''},
+  {text:'CRISPR',color:''},{text:'Microbiology',color:''},
+  {text:'Neural Networks',color:''},{text:'Drug Discovery',color:''},
+  {text:'scRNA-seq',color:''},{text:'Transcriptomics',color:''},
+  {text:'Gut Biology',color:''},{text:'Multi-omics',color:''},
+  {text:'Tumour Biology',color:''},{text:'Bioinformatics',color:''},
+  {text:'Genomics',color:''},{text:'Python',color:''},
+  {text:'Data Science',color:''},{text:'Machine Learning',color:''},
+  {text:'Structural Biology',color:''},{text:'Transformers',color:''}
+];
+
+var rows = [
+  {year:2016,month:'Jul',type:'degree',title:'BSc Molecular Biology',sub:'University of Manchester',link:'',linkText:'',imageUrl:'',desc:"First Class Honours. Final year project on epigenetic regulation in stem cell differentiation. Dean's List commendation.",tags:['Molecular Biology','Epigenetics']},
+  {year:2017,month:'Jun',type:'project',title:'CRISPR Screen for Antibiotic Resistance',sub:'Sanger Institute Summer Programme',link:'',linkText:'',imageUrl:'',desc:'Designed and executed a genome-wide CRISPR knockout screen to identify genes conferring resistance to novel antimicrobial compounds.',tags:['CRISPR','Microbiology']},
+  {year:2019,month:'Sep',type:'degree',title:'MSc Bioinformatics',sub:'University College London',link:'',linkText:'',imageUrl:'',desc:'Distinction. Dissertation on graph neural networks for drug-target interaction prediction. Awarded the Departmental Prize for Outstanding Achievement.',tags:['Neural Networks','Drug Discovery']},
+  {year:2020,month:'Nov',type:'publication',title:'Single-Cell Transcriptomic Landscape of the Gut Epithelium',sub:'Cell Systems',link:'',linkText:'',imageUrl:'',desc:'First-author publication characterising 47 distinct cell populations across the intestinal epithelium using scRNA-seq and spatial transcriptomics.',tags:['scRNA-seq','Transcriptomics','Gut Biology']},
+  {year:2022,month:'Jun',type:'degree',title:'PhD in Computational Biology',sub:'University of Cambridge',link:'',linkText:'',imageUrl:'',desc:'Thesis: Integrative multi-omics approaches to deconvolve tumour microenvironments. Wellcome Trust funded. Distinction.',tags:['Multi-omics','Tumour Biology','Bioinformatics']},
+  {year:2023,month:'Mar',type:'project',title:'Pan-Cancer Genomic Atlas',sub:'Wellcome Sanger Institute',link:'',linkText:'',imageUrl:'',desc:'Led a cross-institutional project analysing genomic data from 12,000+ tumour samples to identify novel driver mutations across 18 cancer types.',tags:['Genomics','Python','Data Science']},
+  {year:2024,month:'Sep',type:'publication',title:'Deep Learning for Protein Structure Prediction',sub:'Nature Methods',link:'',linkText:'',imageUrl:'',desc:'Co-authored a study introducing a novel transformer architecture that improved protein fold prediction accuracy by 23% across benchmark datasets.',tags:['Machine Learning','Structural Biology','Transformers']}
+];
+
+var activePickerRow = null;
+var previewOpen     = true;
+var sortAsc         = true;
+var dragSrc         = null;
+
+/* =================================================================
+   HELPERS
+================================================================= */
+/* Escape string for safe insertion into HTML attribute values */
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;')
+    .replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+/* Wrap value in JS double-quotes, escaping inner chars */
+function jsStr(s) {
+  return '"' + String(s).replace(/\\/g,'\\\\').replace(/"/g,'\\"') + '"';
+}
+/* Label -> safe object key */
+function toKey(label) {
+  return label.toLowerCase().trim().replace(/[^a-z0-9]+/g,'_').replace(/^_|_$/g,'') || 'type';
+}
+/* Hex + alpha -> rgba() */
+function h2r(hex, a) {
+  var r=parseInt(hex.slice(1,3),16), g=parseInt(hex.slice(3,5),16), b=parseInt(hex.slice(5,7),16);
+  return 'rgba('+r+','+g+','+b+','+a+')';
+}
+/* Get type config by key */
+function getTypeConf(key) {
+  return config.types.find(function(t){return t.key===key;}) || {label:key, color:'#888888'};
+}
+
+/* =================================================================
+   FONT PRELOAD  (all fonts loaded once so preview is instant)
+================================================================= */
+(function(){
+  var fams = ALL_FONTS.map(function(f){return f.replace(/ /g,'+') + ':wght@400;500';}).join('&family=');
+  var l = document.createElement('link');
+  l.rel  = 'stylesheet';
+  l.href = 'https://fonts.googleapis.com/css2?family=' + fams + '&display=swap';
+  document.head.appendChild(l);
+})();
+
+/* =================================================================
+   DARK MODE
+================================================================= */
+function applyTheme(theme) {
+  if (theme === 'dark') {
+    document.documentElement.setAttribute('data-theme','dark');
+    document.getElementById('dm-track').classList.add('on');
+  } else {
+    document.documentElement.removeAttribute('data-theme');
+    document.getElementById('dm-track').classList.remove('on');
+  }
+  config.theme = theme;
+}
+function toggleDark() {
+  var next = config.theme === 'dark' ? 'light' : 'dark';
+  applyTheme(next);
+  localStorage.setItem('tl-theme', next);
+  renderOutput();
+}
+/* Restore on load */
+(function(){
+  var saved = localStorage.getItem('tl-theme');
+  if (saved) applyTheme(saved);
+})();
+
+/* =================================================================
+   LOCAL STORAGE AUTO-SAVE
+================================================================= */
+function saveToLocal() {
+  try {
+    localStorage.setItem(LS_KEY, JSON.stringify({config:config, rows:rows, tagLibrary:tagLibrary}));
+  } catch(e) {/* quota exceeded */}
+}
+function loadFromLocal() {
+  try {
+    var raw = localStorage.getItem(LS_KEY);
+    if (!raw) return false;
+    var d = JSON.parse(raw);
+    if (d.config) {
+      /* Deep-merge saved config onto defaults */
+      Object.keys(d.config).forEach(function(k) {
+        if (k === 'types') { config.types = d.config.types; return; }
+        if (typeof d.config[k] === 'object' && d.config[k] !== null && !Array.isArray(d.config[k]) && config[k]) {
+          Object.keys(d.config[k]).forEach(function(kk){ config[k][kk] = d.config[k][kk]; });
+        } else { config[k] = d.config[k]; }
+      });
+      sortAsc = !config.sortDesc;
+      applyTheme(config.theme || 'light');
+    }
+    if (Array.isArray(d.rows))       rows       = d.rows;
+    if (Array.isArray(d.tagLibrary)) tagLibrary = d.tagLibrary;
+    return true;
+  } catch(e) { return false; }
+}
+function clearLocalSave() {
+  if (!confirm('Clear all auto-saved data and reset to defaults?')) return;
+  localStorage.removeItem(LS_KEY);
+  location.reload();
+}
+
+/* =================================================================
+   IMPORT
+================================================================= */
+function importDataJs(text) {
+  try {
+    var fn  = new Function(text + '\n return {CONFIG:CONFIG, DATA:DATA};');
+    var res = fn();
+    if (res.CONFIG) {
+      var c = res.CONFIG;
+      if (c.theme)      applyTheme(c.theme);
+      if (c.sortDesc !== undefined) { config.sortDesc = c.sortDesc; sortAsc = !c.sortDesc; }
+      if (c.font)       config.font      = c.font;
+      if (c.fontSize)   config.fontSize  = c.fontSize;
+      if (c.fontColor !== undefined) config.fontColor = c.fontColor;
+      if (c.spine)      Object.assign(config.spine,     c.spine);
+      if (c.connector)  Object.assign(config.connector, c.connector);
+      if (c.card)       Object.assign(config.card,      c.card);
+      if (c.textStyles) {
+        if (c.textStyles.date && !c.textStyles.year) c.textStyles.year = c.textStyles.date;
+        Object.keys(c.textStyles).forEach(function(k){
+          if (config.textStyles[k]) Object.assign(config.textStyles[k], c.textStyles[k]);
+        });
+      }
+      if (c.tagColors) config.tagColors = c.tagColors;
+      if (c.types) {
+        config.types = Array.isArray(c.types)
+          ? c.types
+          : Object.entries(c.types).map(function(e){return {key:e[0],label:e[1].label,color:e[1].color};});
+      }
+      /* Sync tagLibrary colours */
+      if (c.tagColors) {
+        Object.entries(c.tagColors).forEach(function(e){
+          var existing = tagLibrary.find(function(t){return t.text===e[0];});
+          if (existing) existing.color = e[1];
+          else tagLibrary.push({text:e[0], color:e[1]});
+        });
+      }
+    }
+    if (res.DATA && Array.isArray(res.DATA)) {
+      rows = res.DATA.map(function(r){
+        return {
+          year:r.year||new Date().getFullYear(), month:r.month||'Jan',
+          type:r.type||(config.types[0]&&config.types[0].key)||'degree',
+          title:r.title||'', sub:r.sub||'', link:r.link||'',
+          linkText:r.linkText||'', imageUrl:r.imageUrl||'',
+          desc:r.desc||'', tags:r.tags||[]
+        };
+      });
+    }
+    renderAll();
+    showToast('Imported \u2713');
+  } catch(e) { alert('Could not parse data.js\n\n' + e.message); }
+}
+
+/* =================================================================
+   TOAST
+================================================================= */
+function showToast(msg) {
+  var t = document.getElementById('toast');
+  if (!t) {
+    t = document.createElement('div'); t.id = 'toast';
+    t.style.cssText = 'position:fixed;bottom:24px;right:24px;background:#1a1a1a;color:#fff;' +
+      'font-size:12px;padding:8px 16px;border-radius:8px;z-index:9999;opacity:0;' +
+      'transition:opacity .2s;pointer-events:none;';
+    document.body.appendChild(t);
+  }
+  t.textContent = msg; t.style.opacity = '1';
+  setTimeout(function(){ t.style.opacity = '0'; }, 2200);
+}
+
+/* =================================================================
+   RENDER: TYPES PANEL
+   Uses DOM methods — no inline handlers in HTML strings.
+================================================================= */
+function renderTypes() {
+  var el = document.getElementById('types-list');
+  el.innerHTML = '';
+  config.types.forEach(function(t, i) {
+    /* Row container */
+    var row = document.createElement('div');
+    row.className = 'type-row';
+
+    /* Colour swatch */
+    var swWrap = document.createElement('div');
+    swWrap.className = 'sw'; swWrap.style.cssText = 'width:28px;height:28px';
+    swWrap.title = 'Pick colour';
+    var swFace = document.createElement('div');
+    swFace.className = 'sw-face'; swFace.style.background = t.color;
+    swFace.id = 'tsf-' + i;
+    var colInp = document.createElement('input');
+    colInp.type = 'color'; colInp.value = t.color;
+    colInp.dataset.typeIdx = i;
+    swWrap.appendChild(swFace); swWrap.appendChild(colInp);
+
+    /* Label input */
+    var lblInp = document.createElement('input');
+    lblInp.type = 'text'; lblInp.value = t.label; lblInp.placeholder = 'Label';
+    lblInp.style.flex = '1.2';
+    lblInp.dataset.typeIdx = i;
+    lblInp.className = 'type-lbl-inp';
+
+    /* Preview pill */
+    var pill = document.createElement('span');
+    pill.className = 'type-preview';
+    pill.id = 'tprev-' + i;
+    pill.textContent = t.label;
+    pill.style.background = h2r(t.color, 0.12);
+    pill.style.color = t.color;
+
+    /* Delete button */
+    var delBtn = document.createElement('button');
+    delBtn.className = 'btn btn-sm btn-danger';
+    delBtn.textContent = '\u00d7';
+    delBtn.title = 'Delete type';
+    delBtn.dataset.deleteType = i;
+
+    row.appendChild(swWrap); row.appendChild(lblInp);
+    row.appendChild(pill);
+    row.appendChild(delBtn);
+    el.appendChild(row);
+  });
+
+  /* Refresh type dropdowns in the milestones table */
+  document.querySelectorAll('.type-sel').forEach(function(sel) {
+    var ri = parseInt(sel.dataset.ri);
+    var cur = rows[ri] && rows[ri].type;
+    sel.innerHTML = config.types.map(function(t){
+      return '<option value="' + t.key + '"' + (t.key === cur ? ' selected' : '') + '>' + esc(t.label) + '</option>';
+    }).join('');
+    styleTypeSel(sel);
+  });
+
+  renderOutput();
+  renderPreview();
+}
+
+/* Delegated listener for the types-list panel */
+document.getElementById('types-list').addEventListener('input', function(e) {
+  var el = e.target;
+  var i  = parseInt(el.dataset.typeIdx);
+  if (isNaN(i)) return;
+  if (el.type === 'color') {
+    /* Colour changed */
+    config.types[i].color = el.value;
+    var face = document.getElementById('tsf-' + i);
+    if (face) face.style.background = el.value;
+    var prev = document.getElementById('tprev-' + i);
+    if (prev) { prev.style.background = h2r(el.value, 0.12); prev.style.color = el.value; }
+    document.querySelectorAll('.type-sel').forEach(function(s){ styleTypeSel(s); });
+    renderOutput(); renderPreview();
+  } else if (el.classList.contains('type-lbl-inp')) {
+    /* Label changed — auto-update key if it still matches auto-generated value */
+    var oldKey = config.types[i].key;
+    var oldAuto = toKey(config.types[i].label);
+    config.types[i].label = el.value;
+    var prev = document.getElementById('tprev-' + i);
+    if (prev) prev.textContent = el.value;
+    if (oldKey === oldAuto) {
+      var nk = toKey(el.value);
+      rows.forEach(function(r){ if (r.type === oldKey) r.type = nk; });
+      config.types[i].key = nk;
+      renderTypes(); renderMilestones(); return;
+    }
+    renderOutput();
+  }
+});
+document.getElementById('types-list').addEventListener('click', function(e) {
+  var btn = e.target.closest('[data-delete-type]');
+  if (!btn) return;
+  var i = parseInt(btn.dataset.deleteType);
+  var key = config.types[i].key;
+  if (rows.some(function(r){return r.type===key;}) &&
+      !confirm('"' + config.types[i].label + '" is used. Delete anyway?')) return;
+  config.types.splice(i, 1);
+  renderTypes(); renderMilestones();
+});
+
+function styleTypeSel(sel) {
+  var t = getTypeConf(sel.value);
+  sel.style.background  = h2r(t.color, 0.1);
+  sel.style.color       = t.color;
+  sel.style.borderColor = h2r(t.color, 0.4);
+  sel.style.fontWeight  = '500';
+}
+
+/* =================================================================
+   RENDER: SPINE / CONNECTOR / CARD PANEL
+   Plain property assignments — no quoting issues.
+================================================================= */
+function renderSpinePanel() {
+  var sp = config.spine, cn = config.connector, ca = config.card;
+  document.getElementById('inp-spine-color').value = sp.color;
+  document.getElementById('sw-spine-color').style.background = sp.color;
+  document.getElementById('inp-spine-width').value = sp.width;
+  document.getElementById('inp-conn-color').value  = cn.color;
+  document.getElementById('sw-conn-color').style.background  = cn.color;
+  document.getElementById('inp-conn-width').value  = cn.width;
+  var cbg = ca.background  || '#ffffff';
+  document.getElementById('inp-card-bg').value    = cbg;
+  document.getElementById('sw-card-bg').style.background = cbg;
+  var cbd = ca.borderColor || '#cccccc';
+  document.getElementById('inp-card-border').value = cbd;
+  document.getElementById('sw-card-border').style.background = cbd;
+  document.getElementById('inp-card-bw').value = ca.borderWidth;
+}
+/* Delegated input listeners for spine panel */
+(function(){
+  var ids = {
+    'inp-spine-color': function(v){ config.spine.color=v; document.getElementById('sw-spine-color').style.background=v; },
+    'inp-spine-width': function(v){ config.spine.width=parseFloat(v); },
+    'inp-conn-color':  function(v){ config.connector.color=v; document.getElementById('sw-conn-color').style.background=v; },
+    'inp-conn-width':  function(v){ config.connector.width=parseFloat(v); },
+    'inp-card-bg':     function(v){ config.card.background=v; document.getElementById('sw-card-bg').style.background=v; },
+    'inp-card-border': function(v){ config.card.borderColor=v; document.getElementById('sw-card-border').style.background=v; },
+    'inp-card-bw':     function(v){ config.card.borderWidth=parseFloat(v); }
+  };
+  Object.keys(ids).forEach(function(id){
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener('input',  function(){ ids[id](this.value); renderOutput(); renderPreview(); });
+    el.addEventListener('change', function(){ ids[id](this.value); renderOutput(); renderPreview(); });
+  });
+})();
+
+/* =================================================================
+   TYPOGRAPHY PANEL
+   Global font selector + per-element font/size/colour.
+================================================================= */
+
+/* Font options for per-element dropdowns.
+   Empty value = inherit the global font. */
+var TS_FONT_OPTIONS = [
+  {value:'',                  label:'— Global font —'},
+  {value:'Crimson Pro',       label:'Crimson Pro'},
+  {value:'Playfair Display',  label:'Playfair Display'},
+  {value:'Lora',              label:'Lora'},
+  {value:'EB Garamond',       label:'EB Garamond'},
+  {value:'Source Serif 4',    label:'Source Serif 4'},
+  {value:'Libre Baskerville', label:'Libre Baskerville'},
+  {value:'DM Sans',           label:'DM Sans'},
+  {value:'Inter',             label:'Inter'},
+  {value:'Outfit',            label:'Outfit'},
+  {value:'Plus Jakarta Sans', label:'Plus Jakarta Sans'},
+  {value:'Raleway',           label:'Raleway'},
+  {value:'Nunito',            label:'Nunito'}
+];
+
+/* Returns the font that should be used for a given element.
+   Falls back to the global config.font if none set per-element. */
+function effectiveFont(key) {
+  var s = config.textStyles[key];
+  return (s && s.font) ? s.font : (config.font || 'Crimson Pro');
+}
+
+/* Sync global font select to config.font */
+function renderFontPanel() {
+  var sel = document.getElementById('font-select');
+  for (var i = 0; i < sel.options.length; i++) {
+    if (sel.options[i].text === config.font || sel.options[i].value === config.font) {
+      sel.selectedIndex = i; break;
+    }
+  }
+}
+
+/* Global font selector — changing it re-renders preview and output */
+document.getElementById('font-select').addEventListener('change', function() {
+  config.font = this.value;
+  renderOutput(); renderPreview();
+});
+
+/* Build the text-styles table: element | font override | size | colour */
+function renderTextStyles() {
+  var tbody = document.getElementById('ts-tbody');
+  tbody.innerHTML = '';
+
+  TS_DEFS.forEach(function(def) {
+    var s   = config.textStyles[def.key] || {font:'', size:def.def, color:''};
+    var col = s.color || '#555555';
+    var tr  = document.createElement('tr');
+
+    /* Label */
+    var td1 = document.createElement('td');
+    td1.textContent = def.label;
+
+    /* Font override select */
+    var td2  = document.createElement('td');
+    var fSel = document.createElement('select');
+    fSel.className = 'ts-font-sel ts-inp';
+    fSel.dataset.tsKey  = def.key;
+    fSel.dataset.tsProp = 'font';
+    TS_FONT_OPTIONS.forEach(function(opt) {
+      var o = document.createElement('option');
+      o.value = opt.value; o.textContent = opt.label;
+      if (opt.value === (s.font || '')) o.selected = true;
+      fSel.appendChild(o);
+    });
+    td2.appendChild(fSel);
+
+    /* Size input */
+    var td3  = document.createElement('td');
+    var sInp = document.createElement('input');
+    sInp.type = 'number'; sInp.min = '6'; sInp.max = '60'; sInp.step = '1';
+    sInp.value = s.size || def.def;
+    sInp.style.width = '52px';
+    sInp.dataset.tsKey  = def.key;
+    sInp.dataset.tsProp = 'size';
+    sInp.className = 'ts-inp';
+    td3.appendChild(sInp);
+
+    /* Colour swatch */
+    var td4  = document.createElement('td');
+    var wrap = document.createElement('div');
+    wrap.className = 'sw'; wrap.style.cssText = 'width:24px;height:24px';
+    var face = document.createElement('div');
+    face.className = 'sw-face'; face.id = 'ts-sw-' + def.key;
+    face.style.background = col;
+    var cInp = document.createElement('input');
+    cInp.type = 'color'; cInp.value = col;
+    cInp.dataset.tsKey  = def.key;
+    cInp.dataset.tsProp = 'color';
+    cInp.className = 'ts-inp';
+    wrap.appendChild(face); wrap.appendChild(cInp);
+    td4.appendChild(wrap);
+
+    tr.appendChild(td1); tr.appendChild(td2); tr.appendChild(td3); tr.appendChild(td4);
+    tbody.appendChild(tr);
+  });
+}
+
+/* Delegated listener — handles all ts-inp changes inside ts-tbody */
+document.getElementById('ts-tbody').addEventListener('input', function(e) {
+  var el   = e.target;
+  if (!el.classList.contains('ts-inp')) return;
+  var key  = el.dataset.tsKey;
+  var prop = el.dataset.tsProp;
+  if (!key || !prop) return;
+  if (!config.textStyles[key]) config.textStyles[key] = {font:'', size:14, color:''};
+  config.textStyles[key][prop] = (prop === 'size') ? parseInt(el.value) : el.value;
+  if (prop === 'color') {
+    var face = document.getElementById('ts-sw-' + key);
+    if (face) face.style.background = el.value;
+  }
+  renderOutput(); renderPreview();
+});
+
+/* =================================================================
+   RENDER: TAG LIBRARY
+   Library pills and add-row built with DOM methods.
+================================================================= */
+function renderTagLib() {
+  var el = document.getElementById('lib-pills');
+  el.innerHTML = '';
+  if (!tagLibrary.length) {
+    var em = document.createElement('span');
+    em.style.cssText = 'font-size:11px;color:var(--text3);font-style:italic';
+    em.textContent = 'No tags yet.';
+    el.appendChild(em);
+    return;
+  }
+  tagLibrary.forEach(function(tag, i) {
+    var col = tag.color || '';
+    var pill = document.createElement('span');
+    pill.className = 'lib-pill';
+    if (col) {
+      pill.style.background   = h2r(col, 0.15);
+      pill.style.borderColor  = h2r(col, 0.3);
+      pill.style.color        = col;
+    }
+    /* Tag text */
+    var txt = document.createElement('span');
+    txt.textContent = tag.text;
+    /* Colour swatch for this tag */
+    var sw = document.createElement('div');
+    sw.className = 'sw';
+    sw.style.cssText = 'width:14px;height:14px;border-radius:50%;margin-left:4px;vertical-align:middle;';
+    sw.title = 'Tag colour';
+    var swFace = document.createElement('div');
+    swFace.className = 'sw-face';
+    swFace.style.background = col || '#cccccc';
+    var swInp = document.createElement('input');
+    swInp.type = 'color'; swInp.value = col || '#cccccc';
+    swInp.dataset.tagIdx = i;
+    swInp.className = 'tag-color-inp';
+    sw.appendChild(swFace); sw.appendChild(swInp);
+    /* Remove button */
+    var px = document.createElement('span');
+    px.className = 'px'; px.textContent = '\u00d7';
+    px.dataset.removeTagIdx = i;
+    pill.appendChild(txt); pill.appendChild(sw); pill.appendChild(px);
+    el.appendChild(pill);
+  });
+  /* Sync tagColors map */
+  config.tagColors = {};
+  tagLibrary.forEach(function(tag){ if (tag.color) config.tagColors[tag.text] = tag.color; });
+}
+/* Delegated listeners for tag library */
+document.getElementById('lib-pills').addEventListener('input', function(e) {
+  if (!e.target.classList.contains('tag-color-inp')) return;
+  var i = parseInt(e.target.dataset.tagIdx);
+  tagLibrary[i].color = e.target.value;
+  renderTagLib(); renderOutput(); renderPreview();
+});
+document.getElementById('lib-pills').addEventListener('click', function(e) {
+  var px = e.target.closest('[data-remove-tag-idx]');
+  if (!px) return;
+  var i = parseInt(px.dataset.removeTagIdx);
+  var tag = tagLibrary[i].text;
+  var inUse = rows.some(function(r){return r.tags.indexOf(tag)>-1;});
+  if (inUse && !confirm('"' + tag + '" is used by some milestones. Remove from library AND all milestones?')) return;
+  tagLibrary.splice(i, 1);
+  /* Also remove from every milestone row that contains this tag */
+  if (inUse) {
+    rows.forEach(function(r, ri) {
+      var idx = r.tags.indexOf(tag);
+      if (idx > -1) {
+        r.tags.splice(idx, 1);
+        rebuildTagCell(ri);
+      }
+    });
+  }
+  renderTagLib(); renderOutput(); renderPreview();
+});
+
+/* =================================================================
+   RENDER: MILESTONES TABLE
+   ALL event handling via data attributes + delegated listeners.
+   Zero inline handlers — no quote-nesting possible.
+================================================================= */
+function renderMilestones() {
+  var tbody = document.getElementById('tbody');
+  tbody.innerHTML = '';
+  rows.forEach(function(r, i) {
+    var tr = document.createElement('tr');
+    tr.dataset.index = i; tr.draggable = true;
+    tr.addEventListener('dragstart', onDragStart);
+    tr.addEventListener('dragover',  onDragOver);
+    tr.addEventListener('drop',      onDrop);
+    tr.addEventListener('dragend',   onDragEnd);
+
+    var err = validate(i);
+
+    /* ── Build cells with DOM createElement ── */
+
+    /* Drag handle */
+    var tdDrag = document.createElement('td');
+    var handle = document.createElement('span');
+    handle.className = 'drag-handle'; handle.textContent = '\u280f'; // ⠿
+    tdDrag.appendChild(handle);
+
+    /* Row number */
+    var tdN = document.createElement('td');
+    tdN.className = 'row-n'; tdN.textContent = i + 1;
+
+    /* Year — dropdown 1990-2050 */
+    var tdYear = document.createElement('td');
+    var selYear = document.createElement('select');
+    if (err.year) selYear.classList.add('err');
+    selYear.dataset.row = i; selYear.dataset.field = 'year'; selYear.dataset.cast = 'int';
+    for (var yr = 1990; yr <= 2050; yr++) {
+      var yopt = document.createElement('option');
+      yopt.value = yr; yopt.textContent = yr;
+      if (yr === r.year) yopt.selected = true;
+      selYear.appendChild(yopt);
+    }
+    tdYear.className = "col-yr";  tdYear.appendChild(selYear);
+
+    /* Month */
+    var tdMonth = document.createElement('td');
+    var selMonth = document.createElement('select');
+    MONTHS.forEach(function(m){
+      var opt = document.createElement('option');
+      opt.value = m; opt.textContent = m;
+      if (m === r.month) opt.selected = true;
+      selMonth.appendChild(opt);
+    });
+    selMonth.dataset.row = i; selMonth.dataset.field = 'month';
+    tdMonth.className = "col-mo"; tdMonth.appendChild(selMonth);
+
+    /* Type */
+    var tdType = document.createElement('td');
+    var selType = document.createElement('select');
+    selType.className = 'type-sel'; selType.dataset.ri = i;
+    selType.dataset.row = i; selType.dataset.field = 'type';
+    config.types.forEach(function(t){
+      var opt = document.createElement('option');
+      opt.value = t.key; opt.textContent = t.label;
+      if (t.key === r.type) opt.selected = true;
+      selType.appendChild(opt);
+    });
+    tdType.className = "col-ty";  tdType.appendChild(selType);
+
+    /* Title */
+    var tdTitle = document.createElement('td');
+    var inpTitle = document.createElement('input');
+    inpTitle.type = 'text'; inpTitle.value = r.title; inpTitle.placeholder = 'Title';
+    if (err.title) inpTitle.classList.add('err');
+    inpTitle.dataset.row = i; inpTitle.dataset.field = 'title';
+    tdTitle.appendChild(inpTitle);
+
+    /* Institution (autocomplete) */
+    var tdSub = document.createElement('td');
+    tdSub.className = 'ac-wrap';
+    var inpSub = document.createElement('input');
+    inpSub.type = 'text'; inpSub.id = 'ac-inp-' + i;
+    inpSub.value = r.sub; inpSub.autocomplete = 'off';
+    inpSub.placeholder = 'Institution or journal';
+    inpSub.dataset.row = i; inpSub.dataset.field = 'sub'; inpSub.dataset.ac = 'true';
+    var acDrop = document.createElement('div');
+    acDrop.className = 'ac-drop'; acDrop.id = 'ac-drop-' + i;
+    tdSub.appendChild(inpSub); tdSub.appendChild(acDrop);
+
+    /* Logo URL */
+    var tdLogo = document.createElement('td');
+    tdLogo.style.minWidth = '100px';
+    var inpLogo = document.createElement('input');
+    inpLogo.type = 'url'; inpLogo.value = r.imageUrl || '';
+    inpLogo.placeholder = 'https://\u2026/logo.png';
+    inpLogo.dataset.row = i; inpLogo.dataset.field = 'imageUrl';
+    tdLogo.appendChild(inpLogo);
+
+    /* Link URL + label */
+    var tdLink = document.createElement('td');
+    tdLink.style.minWidth = '160px';
+    var inpLink = document.createElement('input');
+    inpLink.type = 'url'; inpLink.value = r.link;
+    inpLink.placeholder = 'https://doi.org/\u2026';
+    inpLink.style.marginBottom = '4px';
+    inpLink.dataset.row = i; inpLink.dataset.field = 'link';
+    var inpLinkTxt = document.createElement('input');
+    inpLinkTxt.type = 'text'; inpLinkTxt.value = r.linkText;
+    inpLinkTxt.placeholder = 'Label (default: Link)';
+    inpLinkTxt.dataset.row = i; inpLinkTxt.dataset.field = 'linkText';
+    tdLink.appendChild(inpLink); tdLink.appendChild(inpLinkTxt);
+
+    /* Description */
+    var tdDesc = document.createElement('td');
+    var txDesc = document.createElement('textarea');
+    txDesc.textContent = r.desc;
+    txDesc.dataset.row = i; txDesc.dataset.field = 'desc';
+    tdDesc.appendChild(txDesc);
+
+    /* Tags */
+    var tdTags = document.createElement('td');
+    var tagsCell = document.createElement('div');
+    tagsCell.className = 'tags-cell'; tagsCell.id = 'tc-' + i;
+    r.tags.forEach(function(tag) {
+      tagsCell.appendChild(makeTagPill(i, tag));
+    });
+    var plusBtn = document.createElement('button');
+    plusBtn.className = 'btn-plus'; plusBtn.textContent = '+';
+    plusBtn.dataset.openPicker = i;
+    tagsCell.appendChild(plusBtn);
+    tdTags.appendChild(tagsCell);
+
+    /* Delete */
+    var tdDel = document.createElement('td');
+    var delBtn = document.createElement('button');
+    delBtn.className = 'btn btn-sm btn-danger';
+    delBtn.textContent = '\u00d7';
+    delBtn.dataset.deleteRow = i;
+    tdDel.appendChild(delBtn);
+
+    tr.appendChild(tdDrag); tr.appendChild(tdN);    tr.appendChild(tdYear);
+    tr.appendChild(tdMonth);tr.appendChild(tdType); tr.appendChild(tdTitle);
+    tr.appendChild(tdSub);  tr.appendChild(tdLogo); tr.appendChild(tdLink);
+    tr.appendChild(tdDesc); tr.appendChild(tdTags); tr.appendChild(tdDel);
+    tbody.appendChild(tr);
+
+    styleTypeSel(selType);
+  });
+  runValidation();
+  renderOutput();
+}
+
+/* Creates a single tag pill element for a row */
+function makeTagPill(ri, tag) {
+  var pill = document.createElement('span');
+  pill.className = 'r-pill';
+  pill.dataset.ri  = ri;
+  pill.dataset.tag = tag;
+  /* Apply tag colour if set */
+  var col = config.tagColors[tag] || '';
+  if (col) {
+    pill.style.background   = h2r(col, 0.15);
+    pill.style.borderColor  = h2r(col, 0.3);
+    pill.style.color        = col;
+  }
+  var txt = document.createElement('span');
+  txt.textContent = tag;
+  var px = document.createElement('span');
+  px.className = 'px'; px.textContent = '\u00d7';
+  px.dataset.removePillRi  = ri;
+  px.dataset.removePillTag = tag;
+  pill.appendChild(txt); pill.appendChild(px);
+  return pill;
+}
+
+/* Rebuild just the tags cell for one row (after add/remove) */
+function rebuildTagCell(ri) {
+  var cell = document.getElementById('tc-' + ri);
+  if (!cell) return;
+  cell.innerHTML = '';
+  rows[ri].tags.forEach(function(tag) { cell.appendChild(makeTagPill(ri, tag)); });
+  var plusBtn = document.createElement('button');
+  plusBtn.className = 'btn-plus'; plusBtn.textContent = '+';
+  plusBtn.dataset.openPicker = ri;
+  cell.appendChild(plusBtn);
+}
+
+/* =================================================================
+   MILESTONES TABLE — DELEGATED EVENT LISTENERS
+   Handles ALL interactions via a single listener on <tbody>.
+================================================================= */
+var tbody = document.getElementById('tbody');
+
+/* change / input — update rows data */
+tbody.addEventListener('change', function(e) {
+  var el  = e.target;
+  var row = el.dataset.row;
+  var fld = el.dataset.field;
+  if (row === undefined || !fld) return;
+  var ri  = parseInt(row);
+  var val = el.value;
+  if (el.dataset.cast === 'int') val = parseInt(val);
+  rows[ri][fld] = val;
+  if (fld === 'type') styleTypeSel(el);
+  renderOutput(); runValidation(); renderPreview();
+});
+
+/* input (oninput) — needed for autocomplete and live updates */
+tbody.addEventListener('input', function(e) {
+  var el  = e.target;
+  var row = el.dataset.row;
+  var fld = el.dataset.field;
+  if (row === undefined || !fld) return;
+  var ri  = parseInt(row);
+  /* For autocomplete field, also trigger dropdown */
+  if (el.dataset.ac) {
+    rows[ri][fld] = el.value;
+    showAcDropdown(ri, el.value);
+  }
+  renderOutput();
+});
+
+/* keydown — autocomplete keyboard navigation */
+tbody.addEventListener('keydown', function(e) {
+  var el = e.target;
+  if (!el.dataset.ac) return;
+  var ri = parseInt(el.dataset.row);
+  handleAcKey(e, ri);
+});
+
+/* blur — close autocomplete after short delay */
+tbody.addEventListener('focusout', function(e) {
+  var el = e.target;
+  if (!el.dataset.ac) return;
+  var ri = parseInt(el.dataset.row);
+  setTimeout(function(){ closeAc(ri); }, 150);
+});
+
+/* click — tag remove, tag picker, delete row */
+tbody.addEventListener('click', function(e) {
+  /* Tag pill remove */
+  var px = e.target.closest('[data-remove-pill-ri]');
+  if (px) {
+    var ri  = parseInt(px.dataset.removePillRi);
+    var tag = px.dataset.removePillTag;
+    rows[ri].tags = rows[ri].tags.filter(function(t){return t!==tag;});
+    rebuildTagCell(ri); renderOutput(); renderPreview();
+    return;
+  }
+  /* Tag picker open */
+  var plus = e.target.closest('[data-open-picker]');
+  if (plus) {
+    openTagPicker(parseInt(plus.dataset.openPicker), plus); return;
+  }
+  /* Delete row */
+  var del = e.target.closest('[data-delete-row]');
+  if (del) {
+    var i = parseInt(del.dataset.deleteRow);
+    if (rows.length===1){alert('Need at least one milestone.');return;}
+    if (confirm('Delete this milestone?')) { rows.splice(i,1); renderMilestones(); renderPreview(); }
+    return;
+  }
+});
+
+/* =================================================================
+   AUTOCOMPLETE
+================================================================= */
+function showAcDropdown(ri, q) {
+  var drop = document.getElementById('ac-drop-' + ri);
+  q = q.trim().toLowerCase();
+  if (q.length < 2) { drop.style.display='none'; return; }
+  var hits = AC_LIST.filter(function(x){return x.val.toLowerCase().indexOf(q)>=0;}).slice(0,10);
+  if (!hits.length) { drop.style.display='none'; return; }
+  /* Build items with DOM — data-val stores the value safely */
+  drop.innerHTML = '';
+  hits.forEach(function(h, idx) {
+    var div = document.createElement('div');
+    div.className = 'ac-item' + (idx===0?' ac-sel':'');
+    div.dataset.ri  = ri;
+    div.dataset.val = h.val;
+    var span1 = document.createElement('span'); span1.textContent = h.val;
+    var span2 = document.createElement('span'); span2.className='ac-badge'; span2.textContent=h.cat;
+    div.appendChild(span1); div.appendChild(span2);
+    drop.appendChild(div);
+  });
+  drop.style.display = 'block';
+}
+function handleAcKey(e, ri) {
+  var drop  = document.getElementById('ac-drop-' + ri);
+  if (!drop || drop.style.display==='none') return;
+  var items = drop.querySelectorAll('.ac-item');
+  var si    = Array.prototype.indexOf.call(items, drop.querySelector('.ac-sel'));
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    if (items[si])   items[si].classList.remove('ac-sel');
+    if (items[si+1]) items[si+1].classList.add('ac-sel');
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    if (items[si])   items[si].classList.remove('ac-sel');
+    if (si>0 && items[si-1]) items[si-1].classList.add('ac-sel');
+  } else if (e.key === 'Enter') {
+    e.preventDefault();
+    var sel = drop.querySelector('.ac-sel');
+    if (sel) pickAc(parseInt(sel.dataset.ri), sel.dataset.val);
+  } else if (e.key === 'Escape') {
+    drop.style.display = 'none';
+  }
+}
+function pickAc(ri, val) {
+  rows[ri].sub = val;
+  var inp = document.getElementById('ac-inp-' + ri);
+  if (inp) inp.value = val;
+  closeAc(ri);
+  renderOutput(); renderPreview();
+}
+function closeAc(ri) {
+  var d = document.getElementById('ac-drop-' + ri);
+  if (d) d.style.display = 'none';
+}
+/* Delegated mousedown on the autocomplete dropdown */
+document.addEventListener('mousedown', function(e) {
+  var item = e.target.closest('.ac-item');
+  if (!item) return;
+  var ri  = parseInt(item.dataset.ri);
+  var val = item.dataset.val;
+  if (!isNaN(ri) && val !== undefined) pickAc(ri, val);
+});
+
+/* =================================================================
+   TAG PICKER POPUP
+================================================================= */
+function openTagPicker(ri, btn) {
+  activePickerRow = ri;
+  var el    = document.getElementById('tag-picker');
+  var inner = document.getElementById('picker-tags');
+  inner.innerHTML = '';
+  var avail = tagLibrary.filter(function(t){return rows[ri].tags.indexOf(t.text)===-1;});
+  if (!avail.length) {
+    var em = document.createElement('span');
+    em.style.cssText = 'font-size:11px;color:var(--text3);font-style:italic';
+    em.textContent = 'All library tags already added.';
+    inner.appendChild(em);
+  } else {
+    avail.forEach(function(tag) {
+      var span = document.createElement('span');
+      span.className = 'pk-tag';
+      span.textContent = tag.text;
+      span.dataset.addTagRi  = ri;
+      span.dataset.addTagTxt = tag.text;
+      if (tag.color) {
+        span.style.background  = h2r(tag.color, 0.15);
+        span.style.borderColor = h2r(tag.color, 0.3);
+        span.style.color       = tag.color;
+      }
+      inner.appendChild(span);
+    });
+  }
+  var rect = btn.getBoundingClientRect();
+  el.style.display = 'block';
+  el.style.top     = (rect.bottom + 5) + 'px';
+  el.style.left    = Math.min(rect.left, window.innerWidth - 290) + 'px';
+}
+document.getElementById('picker-tags').addEventListener('mousedown', function(e) {
+  var tag = e.target.closest('[data-add-tag-ri]');
+  if (!tag) return;
+  var ri  = parseInt(tag.dataset.addTagRi);
+  var txt = tag.dataset.addTagTxt;
+  if (rows[ri].tags.indexOf(txt) === -1) {
+    rows[ri].tags.push(txt);
+    rebuildTagCell(ri); renderOutput(); renderPreview();
+  }
+  /* Keep picker open so multiple tags can be added */
+  openTagPicker(ri, document.querySelector('#tc-' + ri + ' [data-open-picker]'));
+});
+document.addEventListener('click', function(e) {
+  if (!e.target.closest('#tag-picker') && !e.target.closest('[data-open-picker]')) {
+    document.getElementById('tag-picker').style.display = 'none';
+    activePickerRow = null;
+  }
+});
+
+/* =================================================================
+   DRAG REORDER
+================================================================= */
+function onDragStart(e) { dragSrc=this; this.classList.add('dragging'); e.dataTransfer.effectAllowed='move'; }
+function onDragOver(e)  { e.preventDefault(); document.querySelectorAll('tr.drag-over').forEach(function(r){r.classList.remove('drag-over');}); this.classList.add('drag-over'); }
+function onDrop(e) {
+  e.preventDefault();
+  var from=parseInt(dragSrc.dataset.index), to=parseInt(this.dataset.index);
+  if (from===to) return;
+  rows.splice(to, 0, rows.splice(from, 1)[0]);
+  renderMilestones(); renderPreview();
+}
+function onDragEnd() { document.querySelectorAll('tr.dragging,tr.drag-over').forEach(function(r){r.classList.remove('dragging','drag-over');}); }
+
+/* =================================================================
+   SORT
+================================================================= */
+function sortByDate() {
+  sortAsc = !sortAsc;
+  config.sortDesc = !sortAsc;
+  rows.sort(function(a,b){
+    var da=a.year+MONTHS.indexOf(a.month)/12, db=b.year+MONTHS.indexOf(b.month)/12;
+    return sortAsc ? da-db : db-da;
+  });
+  document.getElementById('sort-btn').textContent =
+    sortAsc ? '\u21C5 Oldest \u2192 Newest' : '\u21C5 Newest \u2192 Oldest';
+  renderMilestones(); renderPreview(); renderOutput();
+  showToast(sortAsc ? 'Sorted oldest \u2192 newest' : 'Sorted newest \u2192 oldest');
+}
+
+/* =================================================================
+   VALIDATION
+================================================================= */
+function validate(i) {
+  var r=rows[i], now=new Date().getFullYear();
+  return {
+    year:  !r.year||isNaN(r.year)||r.year<1990||r.year>2050,
+    title: !String(r.title||'').trim(),
+    sub:   !String(r.sub||'').trim()
+  };
+}
+function runValidation() {
+  var banner=document.getElementById('val-banner'), errs=[];
+  rows.forEach(function(r,i){
+    var e=validate(i);
+    if(e.year)  errs.push('Row '+(i+1)+': invalid year');
+    if(e.title) errs.push('Row '+(i+1)+': title is empty');
+    if(e.sub)   errs.push('Row '+(i+1)+': institution / journal is empty');
+  });
+  if (errs.length) {
+    banner.style.display='block';
+    banner.innerHTML='<strong>&#9888; '+errs.length+' issue'+(errs.length>1?'s':'')+
+      ' to fix:</strong><ul>'+errs.map(function(e){return '<li>'+e+'</li>';}).join('')+'</ul>';
+  } else { banner.style.display='none'; }
+}
+
+/* =================================================================
+   LIVE PREVIEW
+================================================================= */
+/* Preview is always expanded — no toggle needed */
+/* openedMiniIdx tracks which preview card is expanded */
+var openedMiniIdx = null;
+
+/* Click on mini-tl: expand/collapse card + dim others */
+document.getElementById('mini-tl').addEventListener('click', function(e) {
+  var card = e.target.closest('.mini-card');
+
+  /* Click on empty area: collapse all + remove dim */
+  if (!card) {
+    if (openedMiniIdx !== null) {
+      var pd = document.getElementById('mprev-desc-' + openedMiniIdx);
+      var ph = document.getElementById('mprev-hint-' + openedMiniIdx);
+      if (pd) pd.style.display = 'none';
+      if (ph) ph.textContent  = '↓ expand';
+      openedMiniIdx = null;
+    }
+    document.querySelectorAll('.mini-card').forEach(function(c){c.classList.remove('mc-dim');});
+    return;
+  }
+
+  var i    = parseInt(card.dataset.mi);
+  var desc = document.getElementById('mprev-desc-' + i);
+  var hint = document.getElementById('mprev-hint-' + i);
+  if (!desc) return;
+
+  /* Collapse previously open card */
+  if (openedMiniIdx !== null && openedMiniIdx !== i) {
+    var old  = document.getElementById('mprev-desc-' + openedMiniIdx);
+    var oldH = document.getElementById('mprev-hint-' + openedMiniIdx);
+    if (old)  old.style.display = 'none';
+    if (oldH) oldH.textContent  = '↓ expand';
+  }
+
+  var isOpen = desc.style.display === 'block';
+  desc.style.display = isOpen ? 'none' : 'block';
+  if (hint) hint.textContent = isOpen ? '↓ expand' : '↑ collapse';
+  openedMiniIdx = isOpen ? null : i;
+
+  /* Apply/remove dimming */
+  document.querySelectorAll('.mini-card').forEach(function(c) {
+    c.classList.toggle('mc-dim', openedMiniIdx !== null && parseInt(c.dataset.mi) !== openedMiniIdx);
+  });
+});
+
+function renderPreview() {
+  var container = document.getElementById('mini-tl');
+  /* Remove old mini rows (keep spine) */
+  Array.from(container.querySelectorAll('.mini-row')).forEach(function(r){r.remove();});
+  var arr = container.querySelector('.mini-arr');
+  if (arr) arr.remove();
+
+  if (!rows.length) return;
+
+  var nowDec   = new Date().getFullYear() + new Date().getMonth()/12;
+  var yrMin    = Math.min.apply(null, rows.map(function(r){return r.year;}));
+  var PX_PER_YR=60, TP=10, DC=22, DR=4.5;
+  function yp(d){ return TP+(d-yrMin)*PX_PER_YR; }
+
+  var spine = document.getElementById('mini-spine');
+  var nowY  = yp(nowDec);
+  spine.style.cssText = 'position:absolute;left:calc(50% - .5px);top:'+TP+'px;' +
+    'height:'+(nowY-TP)+'px;background:'+config.spine.color+';width:'+Math.min(config.spine.width,2)+'px;';
+
+  /* Arrow */
+  var arrowEl = document.createElement('div');
+  arrowEl.className = 'mini-arr';
+  arrowEl.style.cssText = 'position:absolute;left:calc(50% - 4px);top:'+nowY+'px;' +
+    'width:0;height:0;border-left:4px solid transparent;border-right:4px solid transparent;' +
+    'border-top:9px solid '+config.spine.color+';';
+  container.appendChild(arrowEl);
+  /* min-height computed after collision detection below */
+  var miniMaxTop = 0;
+
+  /* Collision detection: same algorithm as index.html.
+     Sort visible entries by their raw yPos, assign sides, then
+     push cards down by MIN_GAP if they would overlap. */
+  var MINI_GAP = 80; /* minimum px between row tops in preview */
+  var previewItems = rows.map(function(r, i) {
+    var dec = r.year + MONTHS.indexOf(r.month)/12;
+    return {idx:i, rawTop: yp(dec) - DC, r:r};
+  });
+  previewItems.sort(function(a,b){return a.rawTop-b.rawTop;});
+  var lastTopMini = {left:-Infinity, right:-Infinity};
+  previewItems.forEach(function(item, vi) {
+    item.isLeft = (vi%2===0);
+    var side = item.isLeft ? 'left' : 'right';
+    item.top = Math.max(item.rawTop, lastTopMini[side] + MINI_GAP);
+    lastTopMini[side] = item.top;
+  });
+
+  previewItems.forEach(function(item) {
+    var i    = item.idx;
+    var r    = item.r;
+    var t    = getTypeConf(r.type);
+    var isLeft = item.isLeft;
+    var bg = h2r(t.color, 0.12);
+
+    /* Build row */
+    var rowEl = document.createElement('div');
+    rowEl.className = 'mini-row';
+    rowEl.style.cssText = 'position:absolute;left:0;right:0;top:'+item.top+'px;z-index:'+(isLeft?1:2)+';';
+
+    /* Mini card */
+    var card = document.createElement('div');
+    card.className = 'mini-card'; card.dataset.mi = i;
+    /* Apply card style from config */
+    var cardBg  = config.card.background  || '';
+    var cardBd  = config.card.borderColor || '';
+    var cardBdW = config.card.borderWidth || 0.5;
+    if (cardBg)  card.style.background = cardBg;
+    if (cardBd)  card.style.border = cardBdW + 'px solid ' + cardBd;
+    else         card.style.border = cardBdW + 'px solid var(--border)';
+
+    var badge = document.createElement('span');
+    badge.className = 'mini-badge';
+    badge.style.background = bg; badge.style.color = t.color;
+    badge.textContent = t.label;
+
+    var headerRow = document.createElement('div');
+    headerRow.style.cssText = 'display:flex;justify-content:space-between;gap:6px;';
+    var left = document.createElement('div');
+    var titleEl = document.createElement('div');
+    titleEl.className = 'mini-title';
+    titleEl.style.fontFamily = "'" + effectiveFont('title') + "', Georgia, sans-serif";
+    /* Apply title text style */
+    var tsTitle = config.textStyles.title || {font:'', size:15, color:''};
+    titleEl.style.fontSize = (tsTitle.size || 15) + 'px';
+    if (tsTitle.color) titleEl.style.color = tsTitle.color;
+    titleEl.textContent = r.title;
+    var subEl = document.createElement('div');
+    subEl.className = 'mini-sub';
+    var tsInst = config.textStyles.institution || {font:'', size:11, color:''};
+    subEl.style.fontFamily = "'" + effectiveFont('institution') + "', Georgia, sans-serif";
+    subEl.style.fontSize = (tsInst.size || 11) + 'px';
+    if (tsInst.color) subEl.style.color = tsInst.color;
+    subEl.textContent = r.sub;
+    left.appendChild(badge); left.appendChild(titleEl); left.appendChild(subEl);
+    if (r.link) {
+      var lnk = document.createElement('a');
+      lnk.href = r.link; lnk.target = '_blank';
+      var tsLink = config.textStyles.link || {font:'', size:10, color:''};
+      lnk.style.cssText = 'font-family:' + effectiveFont('link') + ',Georgia,sans-serif;font-size:' + (tsLink.size||10) + 'px;color:' + (tsLink.color||'var(--text2)') + ';margin-top:4px;display:block;text-decoration:none;';
+      lnk.textContent = '\u2197 ' + (r.linkText||'Link');
+      lnk.addEventListener('click', function(e){e.stopPropagation();});
+      left.appendChild(lnk);
+    }
+    var yrEl = document.createElement('div');
+    yrEl.className = 'mini-yr';
+    yrEl.style.fontFamily = "'" + effectiveFont('year') + "', Georgia, sans-serif";
+    yrEl.style.flexShrink = '0'; yrEl.style.textAlign = 'right';
+    var tsDate = config.textStyles.year || {font:'', size:17, color:''};
+    yrEl.style.fontSize = (tsDate.size || 17) + 'px';
+    if (tsDate.color) yrEl.style.color = tsDate.color;
+    yrEl.innerHTML = r.year + '<br><span style="font-size:9px">' + r.month + '</span>';
+    headerRow.appendChild(left); headerRow.appendChild(yrEl);
+
+    /* Description (hidden by default) */
+    var descEl = document.createElement('div');
+    descEl.className = 'mini-desc'; descEl.id = 'mprev-desc-' + i;
+    var tsDesc = config.textStyles.description || {font:'', size:12, color:''};
+    descEl.style.fontFamily = "'" + effectiveFont('description') + "', Georgia, sans-serif";
+    descEl.style.fontSize = (tsDesc.size || 12) + 'px';
+    if (tsDesc.color) descEl.style.color = tsDesc.color;
+    descEl.textContent = r.desc;
+
+    /* Tags */
+    var tagsEl = document.createElement('div');
+    tagsEl.className = 'mini-tags';
+    r.tags.forEach(function(tag) {
+      var sp = document.createElement('span');
+      sp.className = 'mini-tag';
+      var tc = config.tagColors[tag] || '';
+      if (tc) { sp.style.background=h2r(tc,.15); sp.style.color=tc; sp.style.borderColor=h2r(tc,.3); }
+      sp.textContent = tag;
+      tagsEl.appendChild(sp);
+    });
+
+    var hint = document.createElement('div');
+    hint.id = 'mprev-hint-' + i;
+    hint.style.cssText = 'font-size:9px;color:var(--text3);margin-top:4px;';
+    hint.textContent = '\u2193 expand';
+
+    card.appendChild(headerRow); card.appendChild(descEl);
+    card.appendChild(tagsEl);    card.appendChild(hint);
+
+    /* Spine col */
+    var sc = document.createElement('div'); sc.className = 'mini-sc';
+    var conn = document.createElement('div');
+    conn.className = 'mini-conn ' + (isLeft?'ml':'mr');
+    conn.style.cssText = 'height:'+Math.min(config.connector.width,2)+'px;background:'+config.connector.color+';';
+    var dot = document.createElement('div');
+    dot.className = 'mini-dot';
+    dot.style.cssText = 'background:'+t.color+';box-shadow:0 0 0 2px var(--surface),0 0 0 3.5px '+t.color+';';
+    sc.appendChild(conn); sc.appendChild(dot);
+
+    var leftSlot  = document.createElement('div'); leftSlot.className  = 'mini-left';
+    var rightSlot = document.createElement('div'); rightSlot.className = 'mini-right';
+    if (isLeft) { leftSlot.appendChild(card); } else { rightSlot.appendChild(card); }
+    rowEl.appendChild(leftSlot); rowEl.appendChild(sc); rowEl.appendChild(rightSlot);
+    container.insertBefore(rowEl, arrowEl);
+    if (item.top > miniMaxTop) miniMaxTop = item.top;
+  });
+  container.style.minHeight = (Math.max(miniMaxTop + 180, nowY + 60)) + 'px';
+}
+
+/* =================================================================
+   OUTPUT GENERATOR
+================================================================= */
+function renderOutput() {
+  var tsLines = TS_DEFS.map(function(def){
+    var s = config.textStyles[def.key] || {font:'', size:def.def, color:''};
+    return '    '+def.key+': { font: '+jsStr(s.font||'')+', size: '+s.size+', color: '+jsStr(s.color||'')+' }';
+  }).join(',\n');
+
+  var typeLines = config.types.map(function(t, i){
+    return '    '+t.key+': { label: '+jsStr(t.label)+', color: '+jsStr(t.color)+' }' +
+      (i<config.types.length-1?',':'');
+  }).join('\n');
+
+  var tcEntries = Object.entries(config.tagColors).filter(function(e){return e[1];});
+  var tcStr = tcEntries.length
+    ? '{\n'+tcEntries.map(function(e){return '    '+jsStr(e[0])+': '+jsStr(e[1]);}).join(',\n')+'\n  }'
+    : '{}';
+
+  var out =
+    'const CONFIG = {\n' +
+    '  theme:     '+jsStr(config.theme||'light')+',\n' +
+    '  sortDesc:  '+(config.sortDesc?'true':'false')+',\n' +
+    '  font:      '+jsStr(config.font)+',\n' +
+    '  spine:     { color: '+jsStr(config.spine.color)+', width: '+config.spine.width+' },\n' +
+    '  connector: { color: '+jsStr(config.connector.color)+', width: '+config.connector.width+' },\n' +
+    '  card:      { background: '+jsStr(config.card.background||'')+', borderColor: '+jsStr(config.card.borderColor||'')+', borderWidth: '+config.card.borderWidth+' },\n' +
+    '  textStyles: {\n'+tsLines+'\n  },\n' +
+    '  tagColors: '+tcStr+',\n' +
+    '  types: {\n'+typeLines+'\n  }\n' +
+    '};\n\n';
+
+  out += 'const DATA = [\n';
+  rows.forEach(function(r, i){
+    out += '  {\n';
+    out += '    year:  '+r.year+',\n';
+    out += '    month: '+jsStr(r.month)+',\n';
+    out += '    type:  '+jsStr(r.type)+',\n';
+    out += '    title: '+jsStr(r.title)+',\n';
+    out += '    sub:   '+jsStr(r.sub)+',\n';
+    if (r.imageUrl) out += '    imageUrl:  '+jsStr(r.imageUrl)+',\n';
+    if (r.link)     out += '    link:      '+jsStr(r.link)+',\n';
+    if (r.link&&r.linkText) out += '    linkText:  '+jsStr(r.linkText)+',\n';
+    out += '    desc:  '+jsStr(r.desc)+',\n';
+    out += '    tags:  ['+r.tags.map(jsStr).join(', ')+']\n';
+    out += '  }'+(i<rows.length-1?',':'')+' \n';
+  });
+  out += '];';
+
+  document.getElementById('output').textContent = out;
+  saveToLocal();
+}
+
+/* =================================================================
+   COPY + DOWNLOAD
+================================================================= */
+function copyOutput() {
+  navigator.clipboard.writeText(document.getElementById('output').textContent).then(function(){
+    var b=document.getElementById('copy-btn'); b.textContent='Copied \u2713'; b.classList.add('ok');
+    setTimeout(function(){ b.textContent='Copy'; b.classList.remove('ok'); }, 2200);
+  });
+}
+function downloadFile() {
+  var text = document.getElementById('output').textContent;
+  var blob = new Blob([text],{type:'text/javascript'});
+  var a    = document.createElement('a');
+  a.href   = URL.createObjectURL(blob); a.download='data.js'; a.click();
+  setTimeout(function(){ URL.revokeObjectURL(a.href); }, 1000);
+  showToast('data.js downloaded \u2713');
+}
+
+/* =================================================================
+   TOP-LEVEL EVENT LISTENERS (buttons, import, etc.)
+================================================================= */
+document.getElementById('dm-wrap').addEventListener('click', toggleDark);
+document.getElementById('btn-add-type').addEventListener('click', function(){
+  config.types.push({key:'new_type', label:'New type', color:'#888888'});
+  renderTypes();
+});
+document.getElementById('btn-add-row').addEventListener('click',  addRow);
+document.getElementById('btn-add-row2').addEventListener('click', addRow);
+document.getElementById('sort-btn').addEventListener('click', sortByDate);
+document.getElementById('btn-clear-save').addEventListener('click', clearLocalSave);
+document.getElementById('copy-btn').addEventListener('click', copyOutput);
+document.getElementById('btn-download').addEventListener('click', downloadFile);
+/* preview always open */
+document.getElementById('btn-add-tag').addEventListener('click', addLibTag);
+document.getElementById('new-tag').addEventListener('keydown', function(e){
+  if (e.key === 'Enter') addLibTag();
+});
+document.getElementById('new-tag-color').addEventListener('input', function(){
+  document.getElementById('new-tag-sw-face').style.background = this.value;
+});
+document.getElementById('import-zone').addEventListener('click', function(){
+  document.getElementById('import-file').click();
+});
+document.getElementById('import-file').addEventListener('change', function(){
+  var file = this.files[0]; if (!file) return;
+  var reader = new FileReader();
+  reader.onload = function(e){ importDataJs(e.target.result); };
+  reader.readAsText(file); this.value = '';
+});
+
+function handleDrop(e) {
+  e.preventDefault();
+  document.getElementById('import-zone').classList.remove('drag-over');
+  var file = e.dataTransfer.files[0]; if (!file) return;
+  var reader = new FileReader();
+  reader.onload = function(ev){ importDataJs(ev.target.result); };
+  reader.readAsText(file);
+}
+
+function addRow() {
+  rows.push({
+    year:new Date().getFullYear(), month:'Jan',
+    type:(config.types[0]&&config.types[0].key)||'degree',
+    title:'', sub:'', link:'', linkText:'', imageUrl:'', desc:'', tags:[]
+  });
+  renderMilestones(); renderPreview();
+  setTimeout(function(){ window.scrollTo({top:document.body.scrollHeight,behavior:'smooth'}); }, 50);
+}
+function addLibTag() {
+  var inp = document.getElementById('new-tag');
+  var col = document.getElementById('new-tag-color').value;
+  var v   = inp.value.trim();
+  if (!v) return;
+  if (!tagLibrary.find(function(t){return t.text===v;})) {
+    /* Only store a colour if it's not the default grey */
+    tagLibrary.push({text:v, color: col !== '#cccccc' ? col : ''});
+    renderTagLib();
+  }
+  inp.value = ''; inp.focus();
+}
+
+/* =================================================================
+   RENDER ALL + INIT
+================================================================= */
+function renderAll() {
+  renderTypes();
+  renderSpinePanel();
+  renderFontPanel();
+  renderTextStyles();
+  renderTagLib();
+  renderMilestones();
+  document.getElementById('sort-btn').textContent =
+    sortAsc ? '\u21C5 Oldest \u2192 Newest' : '\u21C5 Newest \u2192 Oldest';
+  renderPreview();
+}
+
+if (loadFromLocal()) {
+  renderAll();
+  showToast('Session restored \u2191');
+} else {
+  renderAll();
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,785 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Research Timeline</title>
+<style>
+/* ═══════════════════════════════════════════════════════════════
+   CSS CUSTOM PROPERTIES (variables)
+   These define every colour token used throughout the page.
+   Two sets: one for light mode, one for dark mode.
+   The correct set is chosen by JavaScript reading CONFIG.theme,
+   which writes either nothing (light) or data-theme="dark" onto
+   the <html> element.
+═══════════════════════════════════════════════════════════════ */
+:root {
+  /* Light mode tokens */
+  --bg:      #f5f4f0;   /* page background */
+  --surface: #ffffff;   /* card background */
+  --surface2:#f5f4f0;   /* tag / badge background */
+  --border:  rgba(0,0,0,0.12);
+  --border2: rgba(0,0,0,0.25);
+  --text:    #1a1a1a;
+  --text2:   #555555;
+  --text3:   #999999;
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-serif:'Crimson Pro', Georgia, serif; /* overridden by JS */
+  --radius-lg: 12px;
+}
+/* Dark mode tokens — applied when JS sets data-theme="dark" on <html> */
+[data-theme="dark"] {
+  --bg:      #1e1e1e;
+  --surface: #1e1e1e;
+  --surface2:#2a2a2a;
+  --border:  rgba(255,255,255,0.10);
+  --border2: rgba(255,255,255,0.22);
+  --text:    #e8e6e0;
+  --text2:   #9a9890;
+  --text3:   #666460;
+}
+
+/* ── Reset ── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--bg); font-family: var(--font-sans); }
+
+/* ── Cards ── */
+.m-card {
+  border-radius: var(--radius-lg);
+  padding: 12px 15px;
+  cursor: pointer;
+  transition: border-color .2s, opacity .3s;
+  /* background / border set inline from CONFIG.card */
+}
+.m-card:hover { filter: brightness(0.97); }
+.m-card.dimmed { opacity: .1; pointer-events: none; }
+
+/* ── Expand / collapse body inside each card ── */
+.exp-body {
+  overflow: hidden;
+  max-height: 0;
+  opacity: 0;
+  transition: max-height .44s ease, opacity .32s ease;
+}
+.exp-body.open { max-height: 400px; opacity: 1; }
+
+/* ── Timeline rows ──
+   Each milestone occupies one absolutely-positioned row.
+   Rows start invisible (opacity:0). Two CSS classes control them:
+     .vis    — makes the row visible (added by IntersectionObserver)
+     .fading — fade-out transition (added during filter hide)
+   IMPORTANT: display is owned only by showRow()/hideRow(), not layout(). ── */
+.m-row {
+  position: absolute;
+  left: 0; right: 0;
+  display: grid;
+  grid-template-columns: 1fr 44px 1fr;
+  opacity: 0;
+  transform: translateY(10px);
+  transition: opacity .38s ease, transform .38s ease;
+}
+.m-row.vis    { opacity: 1; transform: none; }
+.m-row.fading { opacity: 0; transform: translateY(4px); transition: opacity .2s ease, transform .2s ease; }
+
+/* ── Three-column grid slots ── */
+.slot-left  { grid-column: 1; padding-right: 16px; pointer-events: none; }
+.slot-spine { grid-column: 2; position: relative; pointer-events: none; }
+.slot-right { grid-column: 3; padding-left:  16px; pointer-events: none; }
+/* Re-enable clicks only on the actual card inside each slot */
+.slot-left > .m-card, .slot-right > .m-card { pointer-events: all; }
+
+/* ── Mobile: collapse to single column ── */
+@media (max-width: 768px) {
+  .m-row          { grid-template-columns: 32px 1fr; }
+  .slot-left      { display: none !important; }
+  .slot-spine     { grid-column: 1; }
+  .slot-right     { grid-column: 2; padding-left: 10px; }
+  .rw             { max-width: none !important; }
+  .m-card         { padding: 10px 12px; }
+}
+
+/* ── Spine dot ── */
+.dot {
+  width: 11px; height: 11px;
+  border-radius: 50%;
+  position: absolute;
+  left: 50%; transform: translateX(-50%);
+  z-index: 2;
+}
+/* Dot image (when imageUrl is set) */
+.dot-img {
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  object-fit: cover;
+  position: absolute;
+  left: 50%; transform: translateX(-50%);
+  z-index: 2;
+  border: 2px solid var(--surface);
+}
+/* Horizontal connector line */
+.connector { position: absolute; }
+.conn-l { right: calc(50% + 5.5px); left: -16px; }
+.conn-r { left:  calc(50% + 5.5px); right: -16px; }
+@media (max-width: 768px) {
+  .conn-l, .conn-r { left: calc(50% + 5.5px); right: -10px; }
+}
+
+/* ── Filter buttons ── */
+.f-btn {
+  padding: 5px 18px;
+  border-radius: 100px;
+  border: 1.5px solid;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all .18s;
+  letter-spacing: .04em;
+  font-family: var(--font-sans);
+  font-weight: 500;
+}
+
+/* ── Timeline container ── */
+#tl-wrap { position: relative; max-width: 980px; margin: 0 auto; }
+
+/* ── Year scrubber (dual-handle range slider) ── */
+.rw { position: relative; height: 20px; flex: 1; max-width: 360px; }
+.rw input[type=range] {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  appearance: none; -webkit-appearance: none;
+  background: transparent; pointer-events: none; margin: 0;
+}
+.rw input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none; pointer-events: all;
+  width: 13px; height: 13px; border-radius: 50%;
+  background: var(--text); cursor: pointer;
+  border: 2px solid var(--surface);
+}
+.rw input[type=range]::-webkit-slider-runnable-track { height: 2px; background: transparent; }
+.rw input[type=range]::-moz-range-thumb {
+  pointer-events: all; width: 11px; height: 11px;
+  border-radius: 50%; background: var(--text);
+  cursor: pointer; border: 2px solid var(--surface);
+}
+.rtrack { position: absolute; top: 50%; transform: translateY(-50%); left: 0; right: 0; height: 2px; background: var(--border); border-radius: 1px; pointer-events: none; }
+.rfill  { position: absolute; top: 50%; transform: translateY(-50%); height: 2px; background: var(--text2); border-radius: 1px; pointer-events: none; }
+
+/* ── Error / info banner ── */
+#err-banner { display: none; background: #fdf0ee; border: 1px solid #e0a09a; color: #c0392b; font-size: 13px; padding: 14px 18px; border-radius: 10px; margin: 20px; font-family: var(--font-sans); }
+</style>
+</head>
+<body>
+
+<div id="err-banner"></div>
+
+<div style="width:100%; padding:1rem 0.5rem 2rem;">
+
+  <!-- Category filter buttons — built by JS from CONFIG.types -->
+  <div id="filters" style="display:flex; gap:8px; justify-content:center; flex-wrap:wrap; margin-bottom:1.1rem;"></div>
+
+  <!-- Year range scrubber — two stacked <input type=range> create dual handles -->
+  <div style="display:flex; align-items:center; gap:10px; max-width:980px; margin:0 auto 1.6rem; justify-content:center;">
+    <span id="yr-lo-lbl" style="font-size:11px; color:var(--text2); min-width:28px;"></span>
+    <div class="rw">
+      <div class="rtrack"></div>
+      <div class="rfill" id="rfill" style="left:0%; width:100%;"></div>
+      <input type="range" id="yr-lo" step="1" oninput="onYr('lo')">
+      <input type="range" id="yr-hi" step="1" oninput="onYr('hi')">
+    </div>
+    <span id="yr-hi-lbl" style="font-size:11px; color:var(--text2); min-width:28px; text-align:right;"></span>
+  </div>
+
+  <!-- Timeline container — rows, spine, and arrow are injected here by JS -->
+  <div id="tl-wrap">
+    <div id="spine"     style="position:absolute; width:1px; pointer-events:none; z-index:0;"></div>
+    <div id="end-arrow" style="position:absolute; z-index:3; pointer-events:none;">
+      <div id="arrow-shape" style="width:0; height:0; border-left:5px solid transparent; border-right:5px solid transparent;"></div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     INLINE FALLBACK DATA
+     If data.js fails to load (e.g. Chrome over file://), these
+     inline defaults are used instead — so the page always renders.
+     These match the sample milestones in the editor.
+═══════════════════════════════════════════════════════════════ -->
+
+<!-- data.js loads here. If it succeeds, its const CONFIG / const DATA
+     shadow the var CONFIG / var DATA defined above. -->
+<script src="data.js"></script>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════
+   THEME SETUP
+   Must run before anything else renders to avoid a flash.
+   Reads CONFIG.theme ("light" or "dark") and applies the
+   appropriate data-theme attribute to the <html> element.
+═══════════════════════════════════════════════════════════════ */
+(function applyTheme() {
+  if ((CONFIG.theme || 'light') === 'dark') {
+    document.documentElement.setAttribute('data-theme', 'dark');
+  } else {
+    document.documentElement.removeAttribute('data-theme');
+  }
+})();
+
+/* ═══════════════════════════════════════════════════════════════
+   COLOUR HELPER
+   Converts a 6-digit hex colour + alpha (0-1) into rgba().
+   Used to generate semi-transparent colours from solid hex values.
+═══════════════════════════════════════════════════════════════ */
+function h2r(hex, a) {
+  var r = parseInt(hex.slice(1,3), 16);
+  var g = parseInt(hex.slice(3,5), 16);
+  var b = parseInt(hex.slice(5,7), 16);
+  return 'rgba(' + r + ',' + g + ',' + b + ',' + a + ')';
+}
+
+/* ── effectiveFont: returns the font for a given element.
+   Falls back to the global CONFIG.font if none set per-element. */
+function effectiveFont(key) {
+  var ts = (C.textStyles && C.textStyles[key]);
+  return (ts && ts.font) ? ts.font : (C.font || 'Crimson Pro');
+}
+
+/* ─── Resolve CONFIG safely (data.js may have partial structure) ─ */
+var C = CONFIG || {};
+/* Spine & connector with backwards-compat fallback to accentColor */
+var spineColor     = (C.spine     && C.spine.color)     || C.accentColor || '#888888';
+var spineWidth     = (C.spine     && C.spine.width)     || 1;
+var connColor      = (C.connector && C.connector.color) || C.accentColor || '#888888';
+var connWidth      = (C.connector && C.connector.width) || 1;
+var cardBg         = (C.card      && C.card.background) || '';
+var cardBorder     = (C.card      && C.card.borderColor)|| '';
+var cardBorderW    = (C.card      && C.card.borderWidth) || 0.5;
+var sortDesc       = C.sortDesc || false;
+var tagColors      = C.tagColors || {};
+
+/* Text style defaults — used when CONFIG.textStyles doesn't specify */
+var TS_DEFAULTS = {
+  year:        { font: '', size: 17, color: '' },
+  title:       { font: '', size: 15, color: '' },
+  institution: { font: '', size: 11, color: '' },
+  link:        { font: '', size: 10, color: '' },
+  description: { font: '', size: 12, color: '' }
+};
+function ts(key) {
+  /* Returns { font, size, color } merging CONFIG overrides onto defaults.
+     Migrates old 'date' key to 'year' automatically. */
+  var def = TS_DEFAULTS[key] || TS_DEFAULTS['year'];
+  var ov  = C.textStyles && (C.textStyles[key] || (key==='year' && C.textStyles['date']));
+  return {
+    font:  (ov && ov.font)  ? ov.font  : '',
+    size:  (ov && ov.size)  ? ov.size  : def.size,
+    color: (ov && ov.color) ? ov.color : def.color
+  };
+}
+
+/* ── Build CFG lookup from CONFIG.types ──────────────────────── */
+var CFG = {};
+Object.entries(C.types || {}).forEach(function(entry) {
+  var k = entry[0], v = entry[1];
+  CFG[k] = {
+    label:  v.label,
+    /* Auto-pluralise for filter buttons ("Degree" → "Degrees") */
+    plural: v.label.endsWith('s') ? v.label : v.label + 's',
+    bg:     h2r(v.color, 0.12), /* light tint for badge background */
+    col:    v.color,
+    dot:    v.color
+  };
+});
+
+/* ── Inject Google Font ──────────────────────────────────────── */
+(function() {
+  /* Collect all fonts used: global + any per-element overrides */
+  var usedFonts = {};
+  usedFonts[C.font || 'Crimson Pro'] = true;
+  if (C.textStyles) {
+    Object.keys(C.textStyles).forEach(function(k) {
+      var f = C.textStyles[k] && C.textStyles[k].font;
+      if (f) usedFonts[f] = true;
+    });
+  }
+  var families = Object.keys(usedFonts)
+    .map(function(f){ return f.replace(/ /g,'+') + ':wght@400;500'; })
+    .join('&family=');
+  var link = document.createElement('link');
+  link.rel  = 'stylesheet';
+  link.href = 'https://fonts.googleapis.com/css2?family=' + families + '&display=swap';
+  document.head.appendChild(link);
+  /* --font-serif still set to the global font for any legacy CSS references */
+  document.documentElement.style.setProperty(
+    '--font-serif', "'" + (C.font||'Crimson Pro') + "', Georgia, serif"
+  );
+})();
+
+/* ═══════════════════════════════════════════════════════════════
+   LAYOUT CONSTANTS
+═══════════════════════════════════════════════════════════════ */
+var MO        = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+var _now      = new Date();
+var NOW_DEC   = _now.getFullYear() + _now.getMonth() / 12;
+var YR_MIN    = Math.min.apply(null, DATA.map(function(m){ return m.year; }));
+var YR_MAX    = _now.getFullYear();
+var TOP_PAD   = 16;   /* px above first entry */
+var PX_YR     = 55;   /* pixels per year — increase to spread out */
+var DOT_CY    = 30;   /* px from row top to dot vertical centre */
+var DOT_R     = 5.5;  /* dot radius (half of 11px) */
+var MIN_GAP   = 100;  /* minimum px gap between cards on the same side */
+
+/* ── State variables — change when user interacts ── */
+var active   = 'all';
+var yearMin  = YR_MIN;
+var yearMax  = YR_MAX;
+var focused  = null;   /* index of the focused card (everything else dims) */
+var openedId = null;   /* index of the expanded card */
+var baseZ    = {};     /* stacking order for each row */
+/* hiddenSet tracks which row indices are currently display:none.
+   layout() reads this — it NEVER sets row.style.display itself. */
+var hiddenSet = new Set();
+
+var isMobile = function() { return window.innerWidth < 768; };
+
+/* ── Initialise sliders ── */
+['yr-lo', 'yr-hi'].forEach(function(id) {
+  var el = document.getElementById(id);
+  el.min   = YR_MIN;
+  el.max   = YR_MAX;
+  el.value = (id === 'yr-lo') ? YR_MIN : YR_MAX;
+});
+document.getElementById('yr-lo-lbl').textContent = YR_MIN;
+document.getElementById('yr-hi-lbl').textContent = YR_MAX;
+
+/* ── Decimal year: e.g. Jul 2020 → 2020.5 ── */
+function decY(y, m) { return y + MO.indexOf(m) / 12; }
+
+/* ── yPos: maps a decimal year to a pixel offset from container top ──
+   ascending  (sortDesc=false): older at top, newer at bottom
+   descending (sortDesc=true):  newer at top, older at bottom        */
+function yPos(d) {
+  return sortDesc
+    ? TOP_PAD + (NOW_DEC - d) * PX_YR
+    : TOP_PAD + (d - YR_MIN) * PX_YR;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   LAYOUT FUNCTION
+   Positions every visible row on the timeline spine.
+   Critical rule: this function NEVER touches row.style.display.
+   Display is owned exclusively by showRow() and hideRow().
+═══════════════════════════════════════════════════════════════ */
+function layout() {
+  var spineEl = document.getElementById('spine');
+  var arrowEl = document.getElementById('end-arrow');
+  var arrowSh = document.getElementById('arrow-shape');
+  var wrap    = document.getElementById('tl-wrap');
+  var mobile  = isMobile();
+
+  /* ── Spine position and colour ── */
+  var spineH = (NOW_DEC - YR_MIN) * PX_YR;  /* total height in px */
+  spineEl.style.background = spineColor;
+  spineEl.style.width      = spineWidth + 'px';
+  spineEl.style.top        = TOP_PAD + 'px';
+  spineEl.style.height     = spineH + 'px';
+  spineEl.style.left       = mobile ? '15.5px' : 'calc(50% - ' + (spineWidth/2) + 'px)';
+
+  /* ── Terminal arrow (points in the direction time flows) ── */
+  arrowEl.style.left = mobile ? '11px' : 'calc(50% - 5px)';
+  if (!sortDesc) {
+    /* Ascending: arrow at BOTTOM pointing DOWN */
+    arrowEl.style.top          = (TOP_PAD + spineH) + 'px';
+    arrowSh.style.cssText =
+      'width:0;height:0;border-left:5px solid transparent;' +
+      'border-right:5px solid transparent;border-top:11px solid ' + spineColor;
+  } else {
+    /* Descending: arrow at TOP pointing UP */
+    arrowEl.style.top = (TOP_PAD - 11) + 'px';
+    arrowSh.style.cssText =
+      'width:0;height:0;border-left:5px solid transparent;' +
+      'border-right:5px solid transparent;border-bottom:11px solid ' + spineColor;
+  }
+
+  /* ── Step 1: collect visible rows with their ideal (raw) position ── */
+  var visible = [];
+  DATA.forEach(function(m, idx) {
+    if (hiddenSet.has(idx)) return;  /* skip hidden rows */
+    visible.push({ idx: idx, rawTop: yPos(decY(m.year, m.month)) - DOT_CY });
+  });
+
+  /* ── Step 2: sort by rawTop ascending so collision detection works
+     in both asc and desc modes (rawTop values could decrease in desc) ── */
+  visible.sort(function(a, b) { return a.rawTop - b.rawTop; });
+
+  /* ── Step 3: assign sides and apply minimum-gap collision buffer ──
+     Even-indexed visible entries go left, odd go right.
+     If two entries are too close on the same side, push the later one down. */
+  var lastTop = { left: -Infinity, right: -Infinity };
+  visible.forEach(function(item, vi) {
+    var isLeft = mobile ? false : (vi % 2 === 0);
+    var side   = isLeft ? 'left' : 'right';
+    var top    = Math.max(item.rawTop, lastTop[side] + MIN_GAP);
+    lastTop[side] = top;
+    item.top    = top;
+    item.isLeft = isLeft;
+  });
+
+  /* ── Step 4: apply positions and slot cards ── */
+  visible.forEach(function(item) {
+    var idx    = item.idx;
+    var row    = document.getElementById('row-' + idx);
+    if (!row) return;
+
+    row.style.top = item.top + 'px';
+
+    /* z-index: left rows = 1, right rows = 2, open card = 999 */
+    baseZ[idx] = item.isLeft ? 1 : 2;
+    if (openedId !== idx) row.style.zIndex = baseZ[idx];
+
+    var leftSlot  = row.querySelector('.slot-left');
+    var rightSlot = row.querySelector('.slot-right');
+    var card      = row.querySelector('.m-card');
+    var conn      = row.querySelector('.connector');
+    var dot       = row.querySelector('.dot, .dot-img');
+
+    /* Move card to the correct slot (left or right) */
+    if (card) {
+      if (item.isLeft  && card.parentElement !== leftSlot)  { leftSlot.appendChild(card);  rightSlot.innerHTML = ''; }
+      if (!item.isLeft && card.parentElement !== rightSlot) { rightSlot.appendChild(card); leftSlot.innerHTML  = ''; }
+    }
+
+    /* Dot vertical position */
+    if (dot) {
+      dot.style.top = (dot.classList.contains('dot-img') ? DOT_CY - 11 : DOT_CY - DOT_R) + 'px';
+    }
+
+    /* Connector line */
+    if (conn) {
+      conn.className      = 'connector ' + (item.isLeft ? 'conn-l' : 'conn-r');
+      conn.style.top      = (DOT_CY - connWidth / 2) + 'px';
+      conn.style.height   = connWidth + 'px';
+      conn.style.background = connColor;
+    }
+  });
+
+  /* ── Set container min-height to hold all visible rows ── */
+  var maxTop = visible.length ? Math.max.apply(null, visible.map(function(v){ return v.top; })) : 0;
+  wrap.style.minHeight = Math.max(maxTop + 220, TOP_PAD + spineH + 60) + 'px';
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   SHOW / HIDE ROW
+   These are the ONLY functions that touch row.style.display.
+   showRow: display:grid → wait one paint → add .vis (animates in)
+   hideRow: add .fading (animates out) → after transition → display:none
+═══════════════════════════════════════════════════════════════ */
+var FADE_MS   = 200;
+var fadeTimers = {};  /* idx → setTimeout handle */
+
+function showRow(idx) {
+  var row = document.getElementById('row-' + idx);
+  if (!row) return;
+  /* Cancel any pending hide timer for this row */
+  if (fadeTimers[idx]) { clearTimeout(fadeTimers[idx]); delete fadeTimers[idx]; }
+  hiddenSet.delete(idx);
+  row.classList.remove('fading');
+  row.style.display = 'grid';
+  /* Two requestAnimationFrame calls ensure the display:grid is painted
+     before the CSS opacity transition fires */
+  requestAnimationFrame(function() {
+    requestAnimationFrame(function() { row.classList.add('vis'); });
+  });
+}
+
+function hideRow(idx) {
+  var row = document.getElementById('row-' + idx);
+  if (!row) return;
+  hiddenSet.add(idx);
+  row.classList.remove('vis');
+  row.classList.add('fading');
+  fadeTimers[idx] = setTimeout(function() {
+    row.style.display = 'none';
+    row.classList.remove('fading');
+    delete fadeTimers[idx];
+  }, FADE_MS + 20);
+}
+
+/* ── Decide which rows should be visible given current filter state ── */
+function shouldShow(m) {
+  return (active === 'all' || m.type === active)
+      && m.year >= yearMin
+      && m.year <= yearMax;
+}
+
+/* ── Apply current filter: show/hide appropriate rows, then layout ── */
+function applyFilter() {
+  DATA.forEach(function(m, idx) {
+    var want = shouldShow(m);
+    var have = !hiddenSet.has(idx);
+    if (want && !have)  showRow(idx);
+    if (!want && have)  hideRow(idx);
+  });
+  /* Single layout call after all show/hide decisions */
+  setTimeout(function() { layout(); }, 10);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   INTERSECTION OBSERVER — scroll-triggered entrance animations
+   Watches every .m-row. When a row enters the viewport, adds .vis
+   to trigger the CSS fade+slide transition.
+   We do NOT unobserve after the first intersection — rows that are
+   filtered out and then re-shown should animate in again.
+═══════════════════════════════════════════════════════════════ */
+var rowObserver = new IntersectionObserver(function(entries) {
+  entries.forEach(function(e) {
+    /* Only add .vis if not already visible (prevents double-animation) */
+    if (e.isIntersecting && !e.target.classList.contains('vis')) {
+      e.target.classList.add('vis');
+    }
+  });
+}, { threshold: 0.05, rootMargin: '0px 0px -20px 0px' });
+
+function observeRows() {
+  document.querySelectorAll('.m-row').forEach(function(el) {
+    rowObserver.observe(el);
+  });
+}
+
+/* ── Filter button styling ── */
+function setFStyle(btn, type, on) {
+  if (type === 'all') {
+    btn.style.background  = on ? 'var(--text)'    : 'transparent';
+    btn.style.color       = on ? 'var(--surface)' : 'var(--text2)';
+    btn.style.borderColor = on ? 'var(--text)'    : 'var(--border2)';
+  } else {
+    var c = CFG[type]; if (!c) return;
+    btn.style.background  = on ? c.dot : 'transparent';
+    btn.style.color       = on ? '#fff' : c.dot;
+    btn.style.borderColor = c.dot;
+  }
+}
+/* Build filter buttons */
+var filtersEl = document.getElementById('filters');
+[{k:'all',l:'All'}].concat(
+  Object.entries(CFG).map(function(e){ return { k: e[0], l: e[1].plural }; })
+).forEach(function(item) {
+  var b = document.createElement('button');
+  b.className = 'f-btn';
+  b.textContent = item.l;
+  b.dataset.f   = item.k;
+  setFStyle(b, item.k, item.k === 'all');
+  b.onclick = function() {
+    active = item.k;
+    filtersEl.querySelectorAll('.f-btn').forEach(function(x) {
+      setFStyle(x, x.dataset.f, x.dataset.f === item.k);
+    });
+    applyFilter();
+  };
+  filtersEl.appendChild(b);
+});
+
+/* ── Year scrubber handler ── */
+function onYr(which) {
+  var lo = parseInt(document.getElementById('yr-lo').value);
+  var hi = parseInt(document.getElementById('yr-hi').value);
+  if (which === 'lo' && lo > hi) { lo = hi; document.getElementById('yr-lo').value = lo; }
+  if (which === 'hi' && hi < lo) { hi = lo; document.getElementById('yr-hi').value = hi; }
+  yearMin = lo; yearMax = hi;
+  document.getElementById('yr-lo-lbl').textContent = lo;
+  document.getElementById('yr-hi-lbl').textContent = hi;
+  var pct = function(v) { return (v - YR_MIN) / (YR_MAX - YR_MIN) * 100; };
+  document.getElementById('rfill').style.left  = pct(lo) + '%';
+  document.getElementById('rfill').style.width = (pct(hi) - pct(lo)) + '%';
+  applyFilter();
+}
+
+/* ── Focus / dim logic ── */
+function applyFocus() {
+  DATA.forEach(function(_, idx) {
+    var card = document.getElementById('card-' + idx);
+    var row  = document.getElementById('row-'  + idx);
+    if (!card || !row) return;
+    var isOpen = (idx === openedId);
+    card.classList.toggle('dimmed', focused !== null && !isOpen);
+    row.style.zIndex = isOpen ? 999 : (baseZ[idx] || 1);
+  });
+}
+
+/* ── Toggle card expand / collapse ── */
+function toggle(idx) {
+  var wasOpen = (openedId === idx);
+  /* Collapse all cards */
+  DATA.forEach(function(_, i) {
+    var b = document.getElementById('exp-'  + i);
+    var h = document.getElementById('hint-' + i);
+    if (b) b.classList.remove('open');
+    if (h) h.textContent = '\u2193 expand';
+  });
+  if (!wasOpen) {
+    openedId = idx; focused = idx;
+    var b = document.getElementById('exp-' + idx);
+    var h = document.getElementById('hint-'+ idx);
+    if (b) b.classList.add('open');
+    if (h) h.textContent = '\u2191 collapse';
+  } else {
+    openedId = null; focused = null;
+  }
+  applyFocus();
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   BUILD MILESTONE ROWS
+   For each entry in DATA, we create an .m-row div containing:
+     - .slot-left  (or .slot-right) holding the .m-card
+     - .slot-spine holding the dot and connector
+     - The other empty slot
+═══════════════════════════════════════════════════════════════ */
+var wrap = document.getElementById('tl-wrap');
+
+DATA.forEach(function(m, i) {
+  /* Resolve type config; fall back gracefully if unknown type */
+  var t = CFG[m.type] || { label: m.type, bg: '#eee', col: '#888', dot: '#888' };
+
+  var row = document.createElement('div');
+  row.className    = 'm-row';
+  row.id           = 'row-' + i;
+  row.dataset.type = m.type;
+
+  /* Initial side guess — layout() will correct it after first render */
+  var isLeft  = (i % 2 === 0);
+  var dtp     = DOT_CY - DOT_R;         /* dot top edge (px from row top) */
+  var dtp_img = DOT_CY - 11;            /* image dot top edge (22px tall) */
+  var ctp     = DOT_CY - connWidth / 2; /* connector vertical centre */
+
+  /* ── Card styling from CONFIG.card ── */
+  var cardStyle =
+    'background:' + (cardBg     || 'var(--surface)') + ';' +
+    'border:' + cardBorderW + 'px solid ' + (cardBorder || 'var(--border)') + ';';
+
+  /* ── Link HTML ── */
+  var linkLabel = (m.linkText && m.linkText.trim()) ? m.linkText.trim() : 'Link';
+  var tLink = ts('link');
+  var linkHtml = m.link
+    ? '<a href="' + m.link + '" target="_blank" rel="noopener" ' +
+      'onclick="event.stopPropagation()" ' +
+      'style="display:inline-flex;align-items:center;gap:3px;margin-top:5px;text-decoration:none;' +
+      'font-size:' + tLink.size + 'px;' +
+      'color:' + (tLink.color || 'var(--text2)') + ';">' +
+      '\u2197 ' + linkLabel + '</a>'
+    : '';
+
+  /* ── Dot: image thumbnail or coloured circle ── */
+  var dotHtml = m.imageUrl
+    ? '<img class="dot-img" src="' + m.imageUrl + '" alt="" style="top:' + dtp_img + 'px" ' +
+      'onerror="this.style.display=\'none\';' +
+      'var f=document.getElementById(\'fb-' + i + '\');if(f)f.style.display=\'block\'">' +
+      '<div id="fb-' + i + '" class="dot" style="display:none;top:' + dtp + 'px;' +
+      'background:' + t.dot + ';box-shadow:0 0 0 2.5px var(--surface),0 0 0 4px ' + t.dot + ';"></div>'
+    : '<div class="dot" style="top:' + dtp + 'px;background:' + t.dot + ';' +
+      'box-shadow:0 0 0 2.5px var(--surface),0 0 0 4px ' + t.dot + ';"></div>';
+
+  /* ── Thumbnail in card header ── */
+  var thumbHtml = m.imageUrl
+    ? '<img src="' + m.imageUrl + '" alt="" ' +
+      'style="width:28px;height:28px;border-radius:50%;object-fit:cover;' +
+      'border:.5px solid var(--border);flex-shrink:0;margin-right:10px;margin-top:2px;" ' +
+      'onerror="this.style.display=\'none\'">'
+    : '';
+
+  /* ── Text styles ── */
+  var tDate  = ts('year');
+  var tTitle = ts('title');
+  var tInst  = ts('institution');
+  var tDesc  = ts('description');
+
+  /* ── Tags with per-tag colours ── */
+  var tagsHtml = m.tags.map(function(tag) {
+    var tagCol = tagColors[tag] || '';
+    var style = tagCol
+      /* If a tag colour is set, use it for background with auto text colour */
+      ? 'background:' + h2r(tagCol, 0.15) + ';color:' + tagCol + ';border-color:' + h2r(tagCol, 0.3) + ';'
+      : 'background:var(--surface2);color:var(--text2);border-color:transparent;';
+    return '<span style="font-size:10px;padding:2px 8px;border-radius:100px;border:.5px solid;' +
+           style + '">' + tag + '</span>';
+  }).join('');
+
+  /* ── Assemble the card HTML ── */
+  var card =
+    '<div class="m-card" id="card-' + i + '" style="' + cardStyle + '" onclick="toggle(' + i + ')">' +
+      '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;">' +
+        thumbHtml +
+        '<div style="flex:1;min-width:0;">' +
+          /* Type badge */
+          '<span style="display:inline-block;font-size:10px;letter-spacing:.07em;text-transform:uppercase;' +
+          'padding:2px 8px;border-radius:100px;background:' + t.bg + ';color:' + t.col + ';margin-bottom:5px;font-weight:500;">' +
+          t.label + '</span>' +
+          /* Title */
+          '<div style="font-family:var(--font-serif);line-height:1.28;margin-bottom:2px;' +
+          'font-size:' + tTitle.size + 'px;' +
+          'color:' + (tTitle.color || 'var(--text)') + ';">' + m.title + '</div>' +
+          /* Institution */
+          '<div style="font-size:' + tInst.size + 'px;' +
+          'color:' + (tInst.color || 'var(--text2)') + ';">' + m.sub + '</div>' +
+          linkHtml +
+        '</div>' +
+        /* Year + month (right-aligned) */
+        '<div style="text-align:right;flex-shrink:0;padding-left:4px;">' +
+          '<div style="font-family:var(--font-serif);font-weight:400;line-height:1;' +
+          'font-size:' + tDate.size + 'px;' +
+          'color:' + (tDate.color || 'var(--text2)') + ';">' + m.year + '</div>' +
+          '<div style="font-size:10px;color:var(--text3);letter-spacing:.05em;margin-top:1px;">' + m.month + '</div>' +
+        '</div>' +
+      '</div>' +
+      /* Expandable description + tags */
+      '<div id="exp-' + i + '" class="exp-body">' +
+        '<div style="padding-top:10px;margin-top:10px;border-top:.5px solid var(--border);">' +
+          '<p style="line-height:1.7;margin-bottom:8px;' +
+          'font-size:' + tDesc.size + 'px;' +
+          'color:' + (tDesc.color || 'var(--text2)') + ';">' + m.desc + '</p>' +
+          '<div style="display:flex;flex-wrap:wrap;gap:4px;">' + tagsHtml + '</div>' +
+        '</div>' +
+      '</div>' +
+      /* Expand / collapse hint */
+      '<div id="hint-' + i + '" style="margin-top:5px;font-size:10px;color:var(--text3);user-select:none;">' +
+        '\u2193 expand' +
+      '</div>' +
+    '</div>';
+
+  /* ── Spine column ── */
+  var spine =
+    '<div class="slot-spine">' +
+      '<div class="connector ' + (isLeft ? 'conn-l' : 'conn-r') + '" ' +
+      'style="top:' + ctp + 'px;height:' + connWidth + 'px;background:' + connColor + ';"></div>' +
+      dotHtml +
+    '</div>';
+
+  row.innerHTML = isLeft
+    ? '<div class="slot-left">'  + card + '</div>' + spine + '<div class="slot-right"></div>'
+    : '<div class="slot-left"></div>' + spine + '<div class="slot-right">' + card + '</div>';
+
+  wrap.insertBefore(row, document.getElementById('end-arrow'));
+});
+
+/* ── Collapse all cards when clicking outside ── */
+wrap.addEventListener('click', function(e) {
+  if (!e.target.closest('.m-card')) {
+    openedId = null; focused = null;
+    DATA.forEach(function(_, i) {
+      var b = document.getElementById('exp-'  + i);
+      var h = document.getElementById('hint-' + i);
+      if (b) b.classList.remove('open');
+      if (h) h.textContent = '\u2193 expand';
+    });
+    applyFocus();
+  }
+});
+
+/* Re-run layout when viewport width changes (mobile ↔ desktop) */
+window.addEventListener('resize', function() { layout(); });
+
+/* ── Initial render ── */
+layout();
+observeRows();  /* IntersectionObserver triggers .vis per-row as they scroll in */
+</script>
+</body>
+</html>
